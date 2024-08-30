@@ -18,7 +18,7 @@ then
 	species=5
 	genus=10
 	family=10
-elif [[ $Ssource == "DNA" ]]
+elif [[ $Ssource == "WGS" ]]
 then
 	input=$3
 	confidences=(0.1 0.15 0.25)
@@ -27,7 +27,7 @@ then
 	species=2
 	genus=5
 	family=5
-elif [[ $Ssource == "16s" ]]
+elif [[ $Ssource == "16[Ss]" ]]
 then
 	file1=$3
 	file2=$4
@@ -36,6 +36,9 @@ then
 	species=2
 	genus=5
 	family=5
+ else
+ 	echo "unrecognized sequencing type"
+  	exit 1
 fi
 
 echo ${name}
@@ -50,7 +53,7 @@ if [ ! -f ${name}/${name}_paired1.fq.gz ]
 then
 	if [ ! -f ${name}/paired1.fq.gz ]
 	then
-		if [[ $Ssource == "16s" ]]
+		if [[ $Ssource == "16[Ss]" ]]
 		then
 		java -jar $TRIMMOJAR PE -phred33 -trimlog ${name}/trimlog.log ${file1} ${file2} ${name}/paired1.fq ${name}/unpaired1.fq ${name}/paired2.fq ${name}/unpaired2.fq \
 		ILLUMINACLIP:/usr/local/apps/trimmomatic/0.39/adapters/TruSeq3-PE.fa:2:30:10:2:True LEADING:3 TRAILING:3 MINLEN:40 SLIDINGWINDOW:4:10
@@ -92,7 +95,7 @@ do
 
   python ~/KrakenTools-master/make_kreport.py -i <(cat ${name}/${name}-kraken-conf${conf}-pair.txt ${name}/${name}-kraken-conf${conf}-unpair.txt) -t ${db}/ktaxonomy.tsv -o ${name}/${name}-kraken-report-conf${conf}.txt
 	# run bracken shotgun parameters
-	if [[ $Ssource == "RNA" || $Ssource == "DNA" ]]
+	if [[ $Ssource == "RNA" || $Ssource == "WGS" ]]
 	then
     python /data/Sherlock_Lung/JohnMce/est_abundance.py \
     -k ${db}/database100mers.kmer_distrib \
