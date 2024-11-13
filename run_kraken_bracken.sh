@@ -5,38 +5,40 @@ ml kraken
 ml bracken
 ml trimmomatic
 ml hisat
+ml bwa
 
 name=$2
 Ssource=$1
+db=/lscratch/$SLURM_JOB_ID/k2_db
 
 if [[ $Ssource == "RNA" ]]
 then
 	input=$3
-	confidences=(0.1 0.15 0.25)
+	confidences=(0.05 0.1 0.15 0.25)
 	#db=/data/Sherlock_Lung/JohnMce/k2_pluspf_20230605
-	db=/data/Sherlock_Lung/JohnMce/k2_standardPF_plusTranscriptome
+	#db=/lscratch/$SLURM_JOB_ID/k2_standardPF_plusTranscriptome
 	species=5
 	genus=10
 	family=10
 elif [[ $Ssource == "WGS" ]]
 then
 	input=$3
-	confidences=(0.1 0.15 0.25)
-	#db=/data/Sherlock_Lung/JohnMce/k2_pluspf_20230605
-	db=/data/Sherlock_Lung/JohnMce/k2_standardPF_plusTranscriptome
+	confidences=(0.05 0.1 0.15 0.25)
+	#db=/lscratch/$SLURM_JOB_ID/JohnMce/k2_pluspf_20230605
+	#db=/data/Sherlock_Lung/JohnMce/k2_standardPF_plusTranscriptome
 	species=2
 	genus=5
 	family=5
-elif [[ $Ssource == "16[Ss]" ]]
+elif [[ $Ssource == "16s" ]]
 then
 	file1=$3
 	file2=$4
 	confidences=(0.02 0.03 0.04)
-	db=/data/Sherlock_Lung/JohnMce/ncbi_16s
+	#db=/data/Sherlock_Lung/JohnMce/ncbi_16s
 	species=2
 	genus=5
 	family=5
- else
+else
  	echo "unrecognized sequencing type"
   	exit 1
 fi
@@ -48,34 +50,37 @@ then
 	mkdir $name
 fi
 
-pigz -p $SLURM_CPUS_PER_TASK ${name}/*.fq
-if [ ! -f ${name}/${name}_paired1.fq.gz ]
+if [ ! -f ${name}/trimmed1.fq.gz ]
 then
-	if [ ! -f ${name}/paired1.fq.gz ]
+	if [[ $Ssource == "RNA" ]]
 	then
-		if [[ $Ssource == "16[Ss]" ]]
-		then
-		java -jar $TRIMMOJAR PE -phred33 -trimlog ${name}/trimlog.log ${file1} ${file2} ${name}/paired1.fq ${name}/unpaired1.fq ${name}/paired2.fq ${name}/unpaired2.fq \
-		ILLUMINACLIP:/usr/local/apps/trimmomatic/0.39/adapters/TruSeq3-PE.fa:2:30:10:2:True LEADING:3 TRAILING:3 MINLEN:40 SLIDINGWINDOW:4:10
-		else
-		samtools fastq -@ $SLURM_CPUS_PER_TASK -f 4 -F 512,1024 -0 /dev/null -s /dev/null -1 ${name}/${name}_1.fastq -2 ${name}/${name}_2.fastq ${input}
-		java -jar $TRIMMOJAR PE -phred33 -trimlog ${name}/trimlog.log ${name}/${name}_1.fastq ${name}/${name}_2.fastq ${name}/paired1.fq ${name}/unpaired1.fq ${name}/paired2.fq ${name}/unpaired2.fq \
-			ILLUMINACLIP:/usr/local/apps/trimmomatic/0.39/adapters/TruSeq3-PE.fa:2:30:10:2:True LEADING:3 TRAILING:3 MINLEN:40 SLIDINGWINDOW:4:10
-		rm -r ${name}/${name}_1.fastq* -2 ${name}/${name}_2.fastq*
-		pigz -p $SLURM_CPUS_PER_TASK ${name}/*.fq
-		fi
+		##extract both unaligned
+		samtools view -@ $SLURM_CPUS_PER_TASK -f 4,8 -F 512,1024 --output-fmt bam ${input}| samtools sort -@ $SLURM_CPUS_PER_TASK -n | samtools fastq -@ $SLURM_CPUS_PER_TASK -s ${name}/${name}_single.fq -1 ${name}/${name}_1.fq -2 ${name}/${name}_2.fq
 
-	#cat ${name}/unpaired1.fq.gz ${name}/unpaired2.fq.gz > ${name}/unpaired.fq.gz
-	#if [[ $(zcat unpaired.fq.gz | wc -l) > 0 ]]
-	#then
-	#	tophat_readsin="${name}/paired1.fq.gz ${name}/paired2.fq.gz,${name}/unpaired.fq.gz"
-	#else
-	#	tophat_readsin="${name}/paired1.fq.gz ${name}/paired2.fq.gz"
-	#fi
-	hisat2 -p $SLURM_CPUS_PER_TASK -x /data/Sherlock_Lung/JohnMce/CHM13/chm13v2.0 -1 ${name}/paired1.fq.gz -2 ${name}/paired2.fq.gz -U ${name}/unpaired1.fq.gz,${name}/unpaired2.fq.gz | samtools fastq -f 4 -F 512,1024 -0 /dev/null -s ${name}/${name}_loners.fq -1 ${name}/${name}_paired1.fq -2 ${name}/${name}_paired2.fq
+
+		##realign with hisat2 and extract both unaligned
+		hisat2 -p $SLURM_CPUS_PER_TASK -x /data/Sherlock_Lung/JohnMce/CHM13/chm13v2.0 -1 ${name}/${name}_1.fq -2 ${name}/${name}_2.fq --sensitive | samtools view -@ $SLURM_CPUS_PER_TASK -f 4,8 -F 512,1024 --output-fmt bam | samtools sort -@ $SLURM_CPUS_PER_TASK -n | samtools fastq -@ $SLURM_CPUS_PER_TASK -0 ${name}/cleaned_single1_v2.fq -s ${name}/cleaned_single2_v2.fq -1 ${name}/chm13_unalign1.fq -2 ${name}/chm13_unalign2.fq
+
+	elif [[ $Ssource == "WGS" ]]
+	then
+		##extract both unaligned
+		samtools view -@ $SLURM_CPUS_PER_TASK -f 4,8 -F 512,1024 --output-fmt bam ${input}| samtools sort -@ $SLURM_CPUS_PER_TASK -n | samtools fastq -@ $SLURM_CPUS_PER_TASK -s ${name}/${name}_single.fq -1 ${name}/${name}_1.fq -2 ${name}/${name}_2.fq
+
+
+		##realign with bwa-mem and extract both unaligned
+		bwa mem -t $SLURM_CPUS_PER_TASK /data/Sherlock_Lung/JohnMce/CHM13/chm13v2.0.fa ${name}/${name}_1.fq ${name}/${name}_2.fq | samtools view -@ $SLURM_CPUS_PER_TASK -f 4,8 -F 512,1024 --output-fmt bam | samtools sort -@ $SLURM_CPUS_PER_TASK -n | samtools fastq -@ $SLURM_CPUS_PER_TASK -s ${name}/cleaned_single2_v2.fq -1 ${name}/chm13_unalign1.fq -2 ${name}/chm13_unalign2.fq
+
+	else
+		bwa mem -t $SLURM_CPUS_PER_TASK /data/Sherlock_Lung/JohnMce/CHM13/chm13v2.0.fa ${file1} ${file2} | samtools view -@ $SLURM_CPUS_PER_TASK -f 4,8 -F 512,1024 --output-fmt bam | samtools sort -@ $SLURM_CPUS_PER_TASK -n | samtools fastq -@ $SLURM_CPUS_PER_TASK -0 ${name}/cleaned_single1_v2.fq -s ${name}/cleaned_single2_v2.fq -1 ${name}/chm13_unalign1.fq -2 ${name}/chm13_unalign2.fq
+
 	fi
-	rm -r ${name}/paired1.fq* ${name}/unpaired1.fq* ${name}/paired2.fq* ${name}/unpaired2.fq*
-	pigz -p $SLURM_CPUS_PER_TASK ${name}/*.fq
+
+	java -jar $TRIMMOJAR PE -phred33 -trimlog ${name}/trimlog.log ${name}/chm13_unalign1.fq ${name}/chm13_unalign2.fq ${name}/trimmed1.fq ${name}/trimmed_UP1.fq ${name}/trimmed2.fq ${name}/trimmed_UP2.fq \
+			ILLUMINACLIP:/usr/local/apps/trimmomatic/0.39/adapters/TruSeq3-PE.fa:2:30:10:2:True SLIDINGWINDOW:4:10 MINLEN:45
+	
+ 	cat ${name}/trimmed_UP1.fq ${name}/trimmed_UP2.fq > ${name}/trimmed_UP.fq
+
+	gzip ${name}/*.fq
 fi
 
 for conf in "${confidences[@]}"
@@ -85,16 +90,18 @@ do
   --paired --gzip-compressed --confidence ${conf} \
   --output ${name}/${name}-kraken-conf${conf}-pair.txt \
   --report ${name}/${name}-kraken-report-conf${conf}-pair.txt \
-  ${name}/${name}_paired1.fq.gz ${name}/${name}_paired2.fq.gz
+  --minimum-hit-groups 2 \
+  ${name}/trimmed1.fq.gz ${name}/trimmed2.fq.gz
 
   kraken2 \
   --threads $SLURM_CPUS_PER_TASK -db ${db} \
   --gzip-compressed --confidence ${conf} \
   --output ${name}/${name}-kraken-conf${conf}-unpair.txt \
-  ${name}/${name}_loners.fq.gz
+  --minimum-hit-groups 2 \
+  ${name}/trimmed_UP.fq.gz
 
   python ~/KrakenTools-master/make_kreport.py -i <(cat ${name}/${name}-kraken-conf${conf}-pair.txt ${name}/${name}-kraken-conf${conf}-unpair.txt) -t ${db}/ktaxonomy.tsv -o ${name}/${name}-kraken-report-conf${conf}.txt
-	# run bracken shotgun parameters
+	# run bracken with shotgun seq parameters
 	if [[ $Ssource == "RNA" || $Ssource == "WGS" ]]
 	then
     python /data/Sherlock_Lung/JohnMce/est_abundance.py \
