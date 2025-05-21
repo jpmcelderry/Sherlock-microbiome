@@ -1,1 +1,17 @@
 - **run_kraken_braken.sh:** bash script to extract unaligned reads, realign to CHM13, then re-extract unaligned reads and trim. Next, classify with kraken and bracken. Requires 3 inputs in order: the sequencing type (WGS,RNA,16S), the name of the sample for outputting, and lastly the location of the input bam, OR if handling 16S where input is expected to be unaligned, two paired fastq files.
+
+- **driver_script.R:** driver script to recreate all data and figures, run in this order:
+  - **microbiome_functions.R:** Load all required libraries and functions
+  - **Load_data.R:** Load all pre-requisite data
+  - **taxonomy_processing.R:** if necessary, reformat taxonomy output by kraken
+  - **decontam_16S.R:** decontaminate 16S samples
+  - **decontam_RNA.R:** decontaminate+batch correct RNA samples
+  - **decontam_WGS.R:** decontaminate+batch correct WGS samples
+  - **Fig1_Nov2024.R:** plot main figure 1
+  - **Fig2_Nov2024.R:** plot main figure 2
+  - **Fig3_Nov2024.R:** plot main figure 3
+    - also sources all "_diversity.R" and "_differential_abundance.R" scripts to calculate diversity metrics and diff. abundance results
+  - **Fig4_Nov2024.R:** plot main figure 4
+    - calculate all main survival associations, sourcing all "_survival.R" and "Survival_adenos_only.R" scripts
+  - **supplemental_figures_v2.R:** generate all other supplementary figures, sourcing "genomic_associations.R", "raw_composition_supp.R", "ICC_metrics.R", "WGS_blood_analyses.R", "species_analysis.R"
+  - **write_tables.R:** generate main and supplementary tables
