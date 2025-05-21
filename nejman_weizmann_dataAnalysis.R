@@ -13,19 +13,20 @@ nejman_lung<-nejman_lung%>%
   # filter(!grepl("Unknown",genus))%>%
   #do(aggregate(.~genus,data=.,FUN=sum))
   do(aggregate(.~taxonomy,data=.,FUN=sum))
-nejman_lung%>%
-  .[,-1]%>%
-  apply(MARGIN = 2,function(x){x/sum(x)})%>%
-  rowMeans()%>%
-  bind_cols(nejman_lung$taxonomy,.)%>%
-  arrange(-`...2`)
-nejman_avgdist<-nejman_lung%>%column_to_rownames("genus")%>%
-  t()%>%
-  round()%>%
-  avgdist(1000)
-
-
-
-fast.adonis(formula=as.matrix(nejman_avgdist)~Material+Center+`DNA Extraction batch`+`PCR batch`+`Tissue type`,
-            data=(nejman_lung_annos%>%column_to_rownames("Sample_ID (WIS)")%>%.[labels(nejman_avgdist),]),
-            by="terms",boot.times = 100,parallel = 4)$aov.tab
+# nejman_lung%>%
+#   .[,-1]%>%
+#   apply(MARGIN = 2,function(x){x/sum(x)})%>%
+#   rowMeans()%>%
+#   bind_cols(nejman_lung$taxonomy,.)%>%
+#   arrange(-`...2`)
+# nejman_avgdist<-
+#   nejman_lung%>%
+#   column_to_rownames("taxonomy")%>%
+#   t()%>%
+#   round()%>%
+#   avgdist(1000)
+# 
+# nejman_adonis<-
+#   adonis2(formula=as.matrix(nejman_avgdist)~Material+Center+`DNA Extraction batch`+`PCR batch`+`Tissue type`,
+#           data=(nejman_lung_annos%>%column_to_rownames("Sample_ID (WIS)")%>%.[labels(nejman_avgdist),]),
+#           by="margin",permutations = 999,parallel = 4)

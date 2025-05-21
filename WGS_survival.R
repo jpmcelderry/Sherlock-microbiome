@@ -26,10 +26,7 @@ wgs_bacteria_survival<-
       rownames_to_column("Barcode")%>%
       left_join(wgs_full_annotations)%>%
       drop_na(VITAL_STATUS,STAGE_simple,SURVIVAL_TIME_WEEKS_DERIVED)%>%
-      mutate(VITAL_STATUS=(VITAL_STATUS%%2)+1)%>%
-      mutate(vital_status_10Y=if_else(SURVIVAL_TIME_WEEKS_DERIVED>520,1,VITAL_STATUS),
-             survival_weeks_10Y=if_else(SURVIVAL_TIME_WEEKS_DERIVED>520,520.0,SURVIVAL_TIME_WEEKS_DERIVED),
-             stage_binned=if_else(STAGE_simple %in% c("II","III","IV"),"late",STAGE_simple),
+      mutate(stage_binned=if_else(STAGE_simple %in% c("II","III","IV"),"late",STAGE_simple),
              age_over_65=AGE_AT_DIAGNOSIS>65,
              age_by10=cut_interval(AGE_AT_DIAGNOSIS,length = 10))%>%
       filter(VITAL_STATUS!="99999",STAGE_simple!="99999")
@@ -55,51 +52,8 @@ wgs_bacteria_survival<-
 ################################# RUN THE ABOVE FOR WGS and NG232 #################################
 genera_wgs_survival_tumor<-wgs_bacteria_survival(wgs_decontamd,"Tumor")
 genera_wgs_survival_Blood<-wgs_bacteria_survival(wgs_decontamd,"Blood")
-# forest plot
-genera_wgs_survival_plot<-
-  genera_wgs_survival_tumor%>%mutate(`Sample Type`="Tumor")%>%
-  rbind(genera_wgs_survival_Blood%>%mutate(`Sample Type`="Blood"))%>%
-  #left_join(survival_prevalences,by=c("term"="name"))%>%
-  arrange(-estimate)%>%
-  mutate(experiment="WGS")%>%
-  forestplot(name = term,
-             estimate = estimate,
-             se=std.error,
-             #pvalue = p.value,
-             colour=`Sample Type`)+
-  theme_bw()+
-  facet_wrap(~experiment)+
-  labs(x="ln(Cox hazard ratio)")+
-  theme(axis.text.y=element_text(size=8),
-        legend.text = element_text(size=8),
-        legend.title = element_text(size = 10),
-        strip.background = element_rect(fill=WGS_color))+
-  scale_color_manual(values = c(Tumor="red",Normal="blue",Blood="goldenrod"),drop=F)
-genera_wgs_survival_plot
-
 genera_NG232_survival_tumor<-wgs_bacteria_survival(NG232_decontamd,"Tumor")
 genera_NG232_survival_Blood<-wgs_bacteria_survival(NG232_decontamd,"Blood")
-# forest plot
-genera_NG232_survival_plot<-
-  genera_NG232_survival_tumor%>%mutate(`Sample Type`="Tumor")%>%
-  rbind(genera_NG232_survival_Blood%>%mutate(`Sample Type`="Blood"))%>%
-  #left_join(survival_prevalences,by=c("term"="name"))%>%
-  arrange(-estimate)%>%
-  mutate(experiment="WGS")%>%
-  forestplot(name = term,
-             estimate = estimate,
-             se=std.error,
-             #pvalue = p.value,
-             colour=`Sample Type`)+
-  theme_bw()+
-  facet_wrap(~experiment)+
-  labs(x="ln(Cox hazard ratio)")+
-  theme(axis.text.y=element_text(size=8),
-        legend.text = element_text(size=8),
-        legend.title = element_text(size = 10),
-        strip.background = element_rect(fill=WGS_color))+
-  scale_color_manual(values = c(Tumor="red",Normal="blue",Blood="goldenrod"),drop=F)
-genera_NG232_survival_plot
 
 meta_genera_results_tumor<-
   genera_NG232_survival_tumor%>%
@@ -129,7 +83,6 @@ meta_wgs_survival_plot<-
   forestplot(name = term,
              estimate = meta_est,
              se=meta_err,
-             #pvalue = meta_p,
              colour=`Sample Type`)+
   theme_bw()+
   facet_wrap(~experiment)+
@@ -138,13 +91,13 @@ meta_wgs_survival_plot<-
         legend.text = element_text(size=8),
         legend.title = element_text(size = 10),
         strip.background = element_rect(fill=WGS_color))+
-  scale_color_manual(values = c(Tumor="red",Normal="blue",Blood="goldenrod"),drop=F)
+  scale_color_manual(values = c(Tumor="red",Normal="blue",Blood="goldenrod"),drop=F)+
+  coord_cartesian(xlim=c(-7,7))
 meta_wgs_survival_plot
 
 ################################# WGS SURVIVAL AND RICHNESS #################################
 wgs_richness_survival<-
   function(richness_dat,Source){
-    
     WGS_richness_survival<-
       richness_dat%>%
       left_join(wgs_full_annotations)%>%
@@ -153,10 +106,7 @@ wgs_richness_survival<-
       filter(VITAL_STATUS!="99999",
              !is.na(SURVIVAL_TIME_WEEKS_DERIVED),
              STAGE_simple!="99999")%>%
-      mutate(VITAL_STATUS=(VITAL_STATUS%%2)+1)%>%
-      mutate(vital_status_10Y=if_else(SURVIVAL_TIME_WEEKS_DERIVED>520,1,VITAL_STATUS),
-             survival_weeks_10Y=if_else(SURVIVAL_TIME_WEEKS_DERIVED>520,520.0,SURVIVAL_TIME_WEEKS_DERIVED),
-             stage_binned=if_else(STAGE_simple %in% c("II,III","IV"),"late",STAGE_simple),
+      mutate(stage_binned=if_else(STAGE_simple %in% c("II,III","IV"),"late",STAGE_simple),
              age_over_65=AGE_AT_DIAGNOSIS>65,
              age_by10=cut_interval(AGE_AT_DIAGNOSIS,length = 10))%>%
       mutate(rarefied_100=ntile(N100,n=2),
@@ -242,10 +192,7 @@ wgs_diversity_survival<-
       filter(VITAL_STATUS!="99999",
              !is.na(SURVIVAL_TIME_WEEKS_DERIVED),
              STAGE_simple!="99999")%>%
-      mutate(VITAL_STATUS=(VITAL_STATUS%%2)+1,
-             vital_status_10Y=if_else(SURVIVAL_TIME_WEEKS_DERIVED>520,1,VITAL_STATUS),
-             survival_weeks_10Y=if_else(SURVIVAL_TIME_WEEKS_DERIVED>520,520.0,SURVIVAL_TIME_WEEKS_DERIVED),
-             stage_binned=if_else(STAGE_simple %in% c("II,III","IV"),"late",STAGE_simple),
+      mutate(stage_binned=if_else(STAGE_simple %in% c("II,III","IV"),"late",STAGE_simple),
              age_over_65=AGE_AT_DIAGNOSIS>65,
              age_by10=cut_interval(AGE_AT_DIAGNOSIS,length = 10))%>%
       mutate(rarefied_100=ntile(`Shannon diversity`,n=2),

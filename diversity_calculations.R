@@ -1,4 +1,5 @@
 ###### RNA diversity calculations
+# alpha-diversity
 rna_diver_map<-
   map_dfr(c(500,750,1000,1500),
           function(x) map_dfr(1:100,~(rna_combatd_decontamd%>%
@@ -15,6 +16,7 @@ RNAseq_diversity<-
   t()%>%as.data.frame()%>%
   `colnames<-`(c("500","750","1000","1500"))%>%
   rownames_to_column("RNAseq_SampleID")
+# richness
 rna_richness<-
   rna_combatd_decontamd%>%
   filter(tax_id %in% all_bact_genera)%>%
@@ -23,7 +25,7 @@ rna_richness<-
   rarefy(sample = c(100,200,500,750,1000,1500))%>%
   as.data.frame()%>%
   mutate(.before = N100,RNAseq_SampleID=colnames(rna_combatd_decontamd)[-1])
-
+# beta-diversity
 rna_combatd_avgdist<-
   rna_combatd_decontamd%>%
   filter(tax_id %in% all_bact_genera)%>%
@@ -31,12 +33,9 @@ rna_combatd_avgdist<-
   filter(rowMeans(.>10)>0.01)%>%
   t()%>%
   avgdist(500,iterations=50)
-rna_combatd_cmdscale<-
-  cmdscale(rna_combatd_avgdist,list. = T,eig=T,k=10)
-rna_combatd_cmdscale$eig<-
-  (rna_combatd_cmdscale$eig/sum(rna_combatd_cmdscale$eig))*100
 
 ###### 16S diversity calculations
+# alpha-diversity
 s16_diver_map<-
   map_dfr(c(100,200,250,500,750),
           function(x) map_dfr(1:100,~(s16_scrubbed%>%
@@ -53,6 +52,7 @@ s16_diversity<-
   t()%>%as.data.frame()%>%
   `colnames<-`(c("100","200","250","500","750"))%>%
   rownames_to_column("SampleID")
+# richness
 s16_richness<-
   s16_scrubbed%>%
   filter(tax_id %in% all_bact_genera)%>%
@@ -61,7 +61,7 @@ s16_richness<-
   rarefy(sample = c(100,200,250,500,750))%>%
   as.data.frame()%>%
   mutate(.before = N100,SampleID=colnames(s16_scrubbed)[-1])
-
+# beta-diversity
 s16_avgdist<-
   s16_scrubbed%>%
   filter(tax_id %in% all_bact_genera)%>%
@@ -71,7 +71,7 @@ s16_avgdist<-
   avgdist(250,iterations=50)
 
 ###### WGS diversity calculations
-
+# alpha-diversity
 wgs_diver_map<-
   map_dfr(c(100,250,500,750),
           function(x) map_dfr(1:100,~(wgs_decontamd%>%
@@ -87,6 +87,7 @@ WGS_diversity<-
   t()%>%as.data.frame()%>%
   `colnames<-`(c("100","250","500","750"))%>%
   rownames_to_column("Barcode")
+# richness
 WGS_richness<-
   wgs_decontamd%>%
   filter(tax_id %in% all_bact_genera)%>%
@@ -95,7 +96,7 @@ WGS_richness<-
   rarefy(sample = c(100,200,250,500,750))%>%
   as.data.frame()%>%
   mutate(.before = N100,Barcode=colnames(wgs_decontamd)[-1])
-
+# beta-diversity
 wgs_avgdist<-
   wgs_decontamd%>%
   filter(tax_id %in% all_bact_genera)%>%
@@ -105,7 +106,7 @@ wgs_avgdist<-
   avgdist(100,iterations = 50)
 
 ###### NG232 diversity calculations
-
+# alpha-diversity
 NG232_diver_map<-
   map_dfr(c(100,250,500,750),
           function(x) map_dfr(1:100,~(NG232_decontamd%>%
@@ -121,6 +122,7 @@ NG232_diversity<-
   t()%>%as.data.frame()%>%
   `colnames<-`(c("100","250","500","750"))%>%
   rownames_to_column("Barcode")
+# richness
 NG232_richness<-
   NG232_decontamd%>%
   filter(tax_id %in% all_bact_genera)%>%
@@ -129,7 +131,7 @@ NG232_richness<-
   rarefy(sample = c(100,200,250,500,750))%>%
   as.data.frame()%>%
   mutate(.before = N100,Barcode=colnames(NG232_decontamd)[-1])
-
+# beta-diversity
 NG232_avgdist<-
   NG232_decontamd%>%
   filter(tax_id %in% all_bact_genera)%>%

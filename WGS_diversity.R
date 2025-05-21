@@ -1,16 +1,15 @@
 ########################################################################
 ################## BETA DIVERSITY
-
 big_model_wgsAnnos<-
   wgs_full_annotations%>%
   column_to_rownames("Barcode")%>%
   .[labels(wgs_avgdist),]%>%
   filter(Sample_Source=="Tumor")%>%
-  mutate(BMI=cut(BMI, breaks=c(-Inf,18.5,24.9,30,Inf),labels=c("under","normal","overweight","obese"))%>%
-           as.character(),
+  mutate(BMI=cut(BMI, breaks=c(-Inf,18.5,24.9,30,Inf),
+                 labels=c("under","normal","overweight","obese"))%>%as.character(),
          AGE_AT_DIAGNOSIS=cut(AGE_AT_DIAGNOSIS,breaks=5)%>%as.character())%>%
   replace(.=="99999",NA)%>%
-  drop_na(site_study,AGE_AT_DIAGNOSIS,STAGE_simple,HISTOLOGY_COMPOSITE,VITAL_STATUS,ANCESTRY_DERIVED,SEX_DERIVED)
+  drop_na(site_study,AGE_AT_DIAGNOSIS,STAGE_simple,HISTOLOGY_COMPOSITE,METASTASIS,VITAL_STATUS,ANCESTRY_DERIVED,SEX_DERIVED,METASTASIS)
 big_model_ng232Annos<-
   wgs_full_annotations%>%
   column_to_rownames("Barcode")%>%
@@ -20,15 +19,15 @@ big_model_ng232Annos<-
            as.character(),
          AGE_AT_DIAGNOSIS=cut(AGE_AT_DIAGNOSIS,breaks=5)%>%as.character())%>%
   replace(.=="99999",NA)%>%
-  drop_na(site_study,AGE_AT_DIAGNOSIS,STAGE_simple,HISTOLOGY_COMPOSITE,VITAL_STATUS,ANCESTRY_DERIVED,SEX_DERIVED)
+  drop_na(site_study,AGE_AT_DIAGNOSIS,STAGE_simple,HISTOLOGY_COMPOSITE,VITAL_STATUS,ANCESTRY_DERIVED,SEX_DERIVED,METASTASIS)
 
 big_model_wgs<-
   adonis2(formula=as.matrix(wgs_avgdist)[rownames(big_model_wgsAnnos),
-                                         rownames(big_model_wgsAnnos)]~site_study+AGE_AT_DIAGNOSIS+STAGE_simple+HISTOLOGY_COMPOSITE+VITAL_STATUS+ANCESTRY_DERIVED+SEX_DERIVED,
+                                         rownames(big_model_wgsAnnos)]~site_study+AGE_AT_DIAGNOSIS+STAGE_simple+HISTOLOGY_COMPOSITE+METASTASIS+VITAL_STATUS+ANCESTRY_DERIVED+SEX_DERIVED,
                            data = big_model_wgsAnnos,by = "margin",permutations = 999,parallel = 4)
 big_model_ng232<-
   adonis2(formula=as.matrix(NG232_avgdist)[rownames(big_model_ng232Annos),
-                                         rownames(big_model_ng232Annos)]~site_study+AGE_AT_DIAGNOSIS+STAGE_simple+HISTOLOGY_COMPOSITE+VITAL_STATUS+ANCESTRY_DERIVED+SEX_DERIVED,
+                                         rownames(big_model_ng232Annos)]~site_study+AGE_AT_DIAGNOSIS+STAGE_simple+HISTOLOGY_COMPOSITE+METASTASIS+VITAL_STATUS+ANCESTRY_DERIVED+SEX_DERIVED,
           data = big_model_ng232Annos,by = "margin",permutations = 999,parallel = 4)
 
 wgs_betadiver_meta_results<-
@@ -55,8 +54,8 @@ map_wgs_Adiversity<-
       mutate(term=str_replace(term,testvar,paste0(testvar," ")))
   }
 wgs_aDiversity_clinical<-
-  map_dfr(.x = c("STAGE_simple","HISTOLOGY_simple","ANCESTRY_DERIVED","PASSIVE_SMOKE",
-                 "SEX_DERIVED","AGE_AT_DIAGNOSIS","ASTHMA","ANY_PREVIOUS_LUNG_DISEASE"),map_wgs_Adiversity,
+  map_dfr(.x = c("STAGE_simple","HISTOLOGY_simple","METASTASIS","ANCESTRY_DERIVED","PASSIVE_SMOKE",
+                 "SEX_DERIVED","AGE_AT_DIAGNOSIS","ANY_PREVIOUS_LUNG_DISEASE"),map_wgs_Adiversity,
           adiversity=WGS_diversity,
           annotations=(wgs_full_annotations%>%
                          filter(Barcode %in% colnames(wgs_decontamd))%>%
@@ -66,8 +65,8 @@ wgs_aDiversity_clinical<-
   filter(!str_detect(term,"site_study"),!str_detect(term,"Intercept"))%>%
   mutate(fdr=p.adjust(p.value,method="fdr"))
 NG232_aDiversity_clinical<-
-  map_dfr(.x = c("STAGE_simple","HISTOLOGY_simple","ANCESTRY_DERIVED","PASSIVE_SMOKE",
-                 "SEX_DERIVED","AGE_AT_DIAGNOSIS","ASTHMA"),map_wgs_Adiversity,
+  map_dfr(.x = c("STAGE_simple","HISTOLOGY_simple","METASTASIS","ANCESTRY_DERIVED","PASSIVE_SMOKE",
+                 "SEX_DERIVED","AGE_AT_DIAGNOSIS"),map_wgs_Adiversity,
           adiversity=NG232_diversity,
           annotations=(wgs_full_annotations%>%
                          filter(Barcode %in% colnames(NG232_decontamd))%>%
@@ -91,8 +90,8 @@ map_wgs_richness<-
       mutate(term=str_replace(term,testvar,paste0(testvar," ")))
   }
 wgs_richness_clinical<-
-  map_dfr(.x = c("STAGE_simple","HISTOLOGY_simple","ANCESTRY_DERIVED","PASSIVE_SMOKE",
-                 "SEX_DERIVED","AGE_AT_DIAGNOSIS","ASTHMA","ANY_PREVIOUS_LUNG_DISEASE"),map_wgs_richness,
+  map_dfr(.x = c("STAGE_simple","HISTOLOGY_simple","METASTASIS","ANCESTRY_DERIVED","PASSIVE_SMOKE",
+                 "SEX_DERIVED","AGE_AT_DIAGNOSIS","ANY_PREVIOUS_LUNG_DISEASE"),map_wgs_richness,
           adiversity=WGS_richness%>%select(Barcode,N100),
           annotations=(wgs_full_annotations%>%
                          filter(Barcode %in% colnames(wgs_decontamd))%>%
@@ -102,8 +101,8 @@ wgs_richness_clinical<-
   filter(!str_detect(term,"site_study"),!str_detect(term,"Intercept"))%>%
   mutate(fdr=p.adjust(p.value,method="fdr"))
 NG232_richness_clinical<-
-  map_dfr(.x = c("STAGE_simple","HISTOLOGY_simple","ANCESTRY_DERIVED","PASSIVE_SMOKE",
-                 "SEX_DERIVED","AGE_AT_DIAGNOSIS","ASTHMA"),map_wgs_richness,
+  map_dfr(.x = c("STAGE_simple","HISTOLOGY_simple","METASTASIS","ANCESTRY_DERIVED","PASSIVE_SMOKE",
+                 "SEX_DERIVED","AGE_AT_DIAGNOSIS"),map_wgs_richness,
           adiversity=NG232_richness%>%select(Barcode,N100),
           annotations=(wgs_full_annotations%>%
                          filter(Barcode %in% colnames(NG232_decontamd))%>%
@@ -133,8 +132,8 @@ meta_wgs_richness<-
   mutate(fdr=p.adjust(p.value))
 
 wgs_richness_diversity_results<-
-    rbind(meta_wgs_richness%>%mutate(var="WGS genus richness"),
-      meta_wgs_aDiversity%>%mutate(var="WGS Shannon diversity"))%>%
+  rbind(meta_wgs_richness%>%mutate(var="WGS genus richness"),
+        meta_wgs_aDiversity%>%mutate(var="WGS Shannon diversity"))%>%
   rename()%>%
   filter(!str_detect(term,"site_study"))%>%
   mutate_at("term",str_replace,pattern="SMOKE",replacement="SMOKING")%>%

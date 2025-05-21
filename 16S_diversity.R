@@ -6,7 +6,6 @@ s16_paired_filter<-
   pivot_wider(names_from = "Tumor-NormalStatus",values_from = "n")%>%
   drop_na()%>%
   pull(AdditionalAttributes)
-
 map_16s_Adiversity<-
   function(adiversity,annotations,testvar){
     testFormula<-as.formula(paste0("`Shannon diversity`~Study+",testvar))
@@ -20,8 +19,8 @@ map_16s_Adiversity<-
       mutate(term=str_replace(term,testvar,paste0(testvar," ")))
   }
 s16_aDiversity_clinical<-
-  map_dfr(.x = c("STAGE_simple","HISTOLOGY_simple","ANCESTRY_DERIVED","PASSIVE_SMOKE",
-                 "SEX_DERIVED","AGE_AT_DIAGNOSIS","ASTHMA","ANY_PREVIOUS_LUNG_DISEASE"),map_16s_Adiversity,
+  map_dfr(.x = c("STAGE_simple","HISTOLOGY_simple","METASTASIS","ANCESTRY_DERIVED","PASSIVE_SMOKE",
+                 "SEX_DERIVED","AGE_AT_DIAGNOSIS","ANY_PREVIOUS_LUNG_DISEASE"),map_16s_Adiversity,
           adiversity=s16_diversity%>%
             pivot_longer(`100`:`750`,names_to = "depth",values_to = "Shannon diversity")%>%
             filter(depth==250)%>%
@@ -34,6 +33,7 @@ s16_aDiversity_clinical<-
   filter(!str_detect(term,"Site_REF"),!str_detect(term,"Intercept"))%>%
   mutate(fdr=p.adjust(p.value,method="fdr"))
 
+# RICHNESS
 map_16s_richness<-
   function(adiversity,annotations,testvar){
     testFormula<-as.formula(paste0("N250~Study+",testvar))
@@ -47,8 +47,8 @@ map_16s_richness<-
       mutate(term=str_replace(term,testvar,paste0(testvar," ")))
   }
 s16_richness_clinical<-
-  map_dfr(.x = c("STAGE_simple","HISTOLOGY_simple","ANCESTRY_DERIVED","PASSIVE_SMOKE",
-                 "SEX_DERIVED","AGE_AT_DIAGNOSIS","ASTHMA","ANY_PREVIOUS_LUNG_DISEASE"),map_16s_richness,
+  map_dfr(.x = c("STAGE_simple","HISTOLOGY_simple","METASTASIS","ANCESTRY_DERIVED","PASSIVE_SMOKE",
+                 "SEX_DERIVED","AGE_AT_DIAGNOSIS","ANY_PREVIOUS_LUNG_DISEASE"),map_16s_richness,
           adiversity=s16_richness%>%select(SampleID,N250),
           annotations=(s16_clinical_annos%>%
                          filter(SampleID %in% colnames(s16_scrubbed))%>%
@@ -87,7 +87,7 @@ s16_richness_diversity_forest$layers[[2]]<-NULL
 s16_richness_diversity_forest
 
 ########################################################################
-##### ALPHA DIVERSITY VS IMMUNE CELLS
+##### VS IMMUNE CELLS
 s16_immune_cells<-
   s16_richness%>%
   filter(N100!=N250)%>%
@@ -127,8 +127,8 @@ s16_immune_richness_plot<-
   geom_point(aes(size=mean),alpha=0.3)+
   geom_texthline(yintercept = -log10(0.05),lty=2,label="p=0.05",
                  color="red",fontface="italic",hjust=.99,size=3)+
-  geom_texthline(yintercept = -log10(.00175),lty=2,label="FDR=0.05",
-                 color="blue",fontface="italic",hjust=.99,size=3)+
+  # geom_texthline(yintercept = -log10(.00175),lty=2,label="FDR=0.05",
+  #                color="blue",fontface="italic",hjust=.99,size=3)+
   geom_text_repel(max.overlaps = 7,show.legend = F,min.segment.length = 0)+
   geom_vline(xintercept = 0,lty=3)+
   labs(y="-log10(p.value)",x="Correlation coefficient",color="Tissue")+
@@ -147,8 +147,8 @@ s16_immune_diversity_plot<-
   geom_point(aes(size=mean),alpha=0.3)+
   geom_texthline(yintercept = -log10(0.05),lty=2,label="p=0.05",
                  color="red",fontface="italic",hjust=.99,size=3)+
-  geom_texthline(yintercept = -log10(.0035),lty=2,label="FDR=0.05",
-                 color="blue",fontface="italic",hjust=.99,size=3)+
+  # geom_texthline(yintercept = -log10(.0035),lty=2,label="FDR=0.05",
+  #                color="blue",fontface="italic",hjust=.99,size=3)+
   geom_text_repel(max.overlaps = 7,show.legend = F,min.segment.length = 0)+
   geom_vline(xintercept = 0,lty=3)+
   labs(y="-log10(p.value)",x="Correlation coefficient",color="Tissue")+
@@ -156,15 +156,11 @@ s16_immune_diversity_plot<-
   ggh4x::facet_wrap2(~experiment,scales = "free",
                      strip = strip_themed(background_x = element_rect(fill=s16_color)))
 
-
-
 ########################################################################
 ################## BETA DIVERSITY
-
-
 paste0(c("s16_avgdist_mat~Study","Sample_Source","STAGE_simple","HISTOLOGY_COMPOSITE",
          "ANY_PREVIOUS_LUNG_DISEASE","VITAL_STATUS",
-         "RECURRENCE","PASSIVE_SMOKE","ASTHMA","ANCESTRY_DERIVED","SEX_DERIVED"),collapse = "+")
+         "RECURRENCE","PASSIVE_SMOKE","METASTASIS","ANCESTRY_DERIVED","SEX_DERIVED"),collapse = "+")
 big_model_16sAnnos<-
   rename(.data = s16_clinical_annos,Sample_Source="Tumor-NormalStatus")%>%
   column_to_rownames("SampleID")%>%
@@ -173,11 +169,11 @@ big_model_16sAnnos<-
            as.character(),
          AGE_AT_DIAGNOSIS=cut(AGE_AT_DIAGNOSIS,breaks=5)%>%as.character())%>%
   replace(.=="99999",NA)%>%
-  drop_na(Study,AGE_AT_DIAGNOSIS,STAGE_simple,HISTOLOGY_COMPOSITE,VITAL_STATUS,ANCESTRY_DERIVED,SEX_DERIVED)
+  drop_na(Study,AGE_AT_DIAGNOSIS,STAGE_simple,HISTOLOGY_COMPOSITE,VITAL_STATUS,ANCESTRY_DERIVED,SEX_DERIVED,METASTASIS)
 
 big_model_16s<-
   adonis2(formula=as.matrix(s16_avgdist)[rownames(big_model_16sAnnos),
-                                         rownames(big_model_16sAnnos)]~Study+Sample_Source+AGE_AT_DIAGNOSIS+STAGE_simple+HISTOLOGY_COMPOSITE+VITAL_STATUS+ANCESTRY_DERIVED+SEX_DERIVED,
+                                         rownames(big_model_16sAnnos)]~Study+Sample_Source+AGE_AT_DIAGNOSIS+STAGE_simple+HISTOLOGY_COMPOSITE+METASTASIS+VITAL_STATUS+ANCESTRY_DERIVED+SEX_DERIVED,
           data = big_model_16sAnnos,by = "margin",permutations = 999,parallel = 4)
 
 

@@ -22,11 +22,6 @@ harmonization <-
   read_delim("~/Downloads/Sherlock_Harmonization_Final_112221.txt") %>%
   mutate(Sherlock_PID = if_else(is.na(Sherlock_PID), PATIENT_ID, Sherlock_PID)) %>%
   mutate(Sherlock_PID = str_replace(Sherlock_PID, "NSLC-", ""))
-sherlock_tp53_status<-
-  sherlock_data_full%>%
-  filter(Gene=="TP53",Type=="Mutation_Driver")%>%
-  select(Subject,Alteration)
-  
 
 # WGS annotations; 
 annotations <-
@@ -50,19 +45,6 @@ annotations_withClinical <-
   left_join(broad_big_list[, c("Barcode", "broad_plate_id")]) %>%
   mutate(batch = if_else(is.na(broad_plate_id), Study, broad_plate_id))
 
-## MEDIAN hSAPIENS COVERAGE DATA
-median_coverage <-
-  read_delim("extra_data/All_WGS_Median_Coverage.txt") %>%
-  select(Barcode, MEDIAN_COVERAGE)
-# Grade differentiation annotations
-grade_diff_file<-
-  read_delim("~/Downloads/FinalHistologySherlock090424.txt")%>%
-  filter(!str_detect(Status,"Unresolved"))
-grade_diff_info<-
-  grade_diff_file%>%
-  mutate(Differentiation_result=tolower(Differentiation_result))%>%
-  filter(Differentiation_result %in% c("moderate","poorly","well"))%>%
-  select(Sherlock_PID,Differentiation_result)
 ## FULL METADATA
 sherlock_metaTable <-
   read_delim("extra_data/sherlock_20240909.csv", col_names = T,delim = ",")%>%
@@ -74,8 +56,7 @@ sherlock_metaTable <-
   mutate(RACE_DERIVED = case_when(
     !is.na(RACE_DERIVED) ~ RACE_DERIVED,
     STUDY_SITE == "Taiwan" ~ "EAS",
-    STUDY_SITE == "Hong Kong" ~ "EAS"
-  )) %>%
+    STUDY_SITE == "Hong Kong" ~ "EAS")) %>%
   mutate(HISTOLOGY_simple = case_when(
     HISTOLOGY_COMPOSITE %in% c("ADENOCARCINOMA", "SQUAMOUS CELL CARCINOMA", "CARCINOID TUMOR") ~ HISTOLOGY_COMPOSITE,
     is.na(HISTOLOGY_COMPOSITE) ~ NA,
@@ -87,8 +68,8 @@ sherlock_metaTable <-
                                TRUE~NA)%>%
            as.factor()%>%
            relevel(ref = "Female"))%>%
-  mutate(ASTHMA=case_when(ASTHMA==1~"Yes",
-                          ASTHMA==2~"No",
+  mutate(METASTASIS=case_when(METASTASIS==1~"Yes",
+                              METASTASIS==2~"No",
                           TRUE~NA)%>%
            as.factor()%>%
            relevel(ref = "No"))%>%
@@ -101,13 +82,11 @@ sherlock_metaTable <-
                                              ANY_PREVIOUS_LUNG_DISEASE==2~"No",TRUE~NA)%>%
            as.factor()%>%
            relevel(ref = "No"))%>%
+  mutate(VITAL_STATUS=VITAL_STATUS%%2,
+         vital_status_10Y=if_else(SURVIVAL_TIME_WEEKS_DERIVED>520,0,VITAL_STATUS),
+         survival_weeks_10Y=if_else(SURVIVAL_TIME_WEEKS_DERIVED>520,520.0,SURVIVAL_TIME_WEEKS_DERIVED))%>%
   left_join(grade_diff_info)%>%
   mutate(GRADE_DIFF_FINAL=relevel(as.factor(Differentiation_result),ref="poorly"))
-
-# excluded samples to remove
-sherlock_excluded<-
-  read_delim("extra_data/Sherlock_Excluded.csv",delim = ",",col_names = T)%>%
-  drop_na(`Sherlock PID`)
 
 wgs_full_annotations <-
   broad_big_list %>%
@@ -119,15 +98,8 @@ wgs_full_annotations <-
     ) %>%
   left_join(sherlock_metaTable, by = c("sherlock_pid" = "Sherlock_PID"))
 
-pollution_dat <-
-  read_delim("extra_data/PollutionData_2023OCT6.csv")
-pollution_country <-
-  pollution_dat %>%
-  summarise(Pollution = median(`Population.Weighted.PM2.5.ug.m3`),.by=c(Study, Country)) %>%
-  filter(n() == 1,.by=Study)
-
 s16_metadata <-
-  read_delim("~/Downloads/Sherlock_Batch1/NP0493-MB4-manifest.txt") %>%
+  read_delim("extra_data/Sherlock_Batch1/NP0493-MB4-manifest.txt") %>%
   separate(`Source PCR Plate`, into = c("PCR_Plate", "Well"), sep = "_(.*?)", extra = "merge") %>%
   mutate_at("PCR_Plate", str_replace_all, "[PC]*", "")
 s16_clinical_annos <-
@@ -140,7 +112,6 @@ rna_annots <-
   read_delim("~/Sherlock_RNAseq_phase1+2+2R_RNA-seq_clinical_original.txt") %>%
   select(-`Site_REF...18`) %>%
   rename(Site_REF = `Site_REF...3`)
-
 sherlock_rna_batches <-
   read_delim("extra_data/simple_sherlock_rnaBatch.txt", col_names = F) %>%
   rename(Date = "X1", Machine = "X2", SampleID = "X3") %>%
@@ -150,24 +121,6 @@ sherlock_rna_batches <-
   select(RNAseq_SampleID = "SampleID", batch) %>%
   mutate_at("batch", as.character) %>%
   ungroup()
-tcga_rna_batches <-
-  rna_annots %>%
-  select(RNAseq_SampleID) %>%
-  filter(str_detect(RNAseq_SampleID, "TCGA")) %>%
-  mutate(col2 = str_split(RNAseq_SampleID, pattern = "-")) %>%
-  unnest_wider(col2, names_sep = "minimal") %>%
-  select(1, 3, 7, 8) %>%
-  `colnames<-`(c("RNAseq_SampleID", "Hosp", "Plate", "Center")) %>%
-  mutate(batch = paste0(Center, "_", Plate)) %>%
-  select(RNAseq_SampleID, batch)
-tcga_rna_batchInfo <-
-  rna_annots %>%
-  select(RNAseq_SampleID) %>%
-  filter(str_detect(RNAseq_SampleID, "TCGA")) %>%
-  mutate(col2 = str_split(RNAseq_SampleID, pattern = "-")) %>%
-  unnest_wider(col2, names_sep = "minimal") %>%
-  select(1, 3, 7, 8) %>%
-  `colnames<-`(c("RNAseq_SampleID", "Hosp", "Plate", "Center"))
 EAGLE_batch_info <-
   rna_annots %>%
   filter(Dataset == "EAGLE") %>%
@@ -187,11 +140,6 @@ rna_annots_full <-
   select(RNAseq_SampleID:Dataset_NUM, batch) %>%
   left_join(sherlock_metaTable) %>%
   mutate(Site_REF = str_replace(Site_REF, pattern = "CCR-Anish", replacement = "NCI-CCR"))
-rna_annots_full%>%
-  left_join(read_delim("extra_data/RNA_extraction_batch.txt")%>%
-            select(`Sherlock PID`,`Tissue Attribute`,`Created By`,`Source Material`)%>%
-            unique(),
-          by=c("Sherlock_PID"="Sherlock PID","Type"="Tissue Attribute"))
 
 conversion_guide <-
   left_join(
@@ -209,23 +157,11 @@ conversion_guide <-
 # READ KRAKEN OUTPUTS
 ################################################################################
 kraken_raw <-
-  read_delim("/Volumes/Sherlock_Lung/JohnMce/Kraken_WGS3/nov24_test_collated.txt") %>%
+  read_delim("/Volumes/Sherlock_Lung/JohnMce/Kraken_WGS3/wgs_bracken-0.1.txt") %>%
   rename(tax_id = `4`) %>%
   select(tax_id, any_of(annotations_withClinical$Barcode)) %>%
   mutate_at("tax_id", as.character)
-# Remove public data; too noisy
-wgs_nopublic<-
-  annotations_withClinical%>%
-  filter(Smoking=="Non-Smoker",
-         !Study %in%c("TCGA-legacy","TCGA-new","EAGLE_Smoker","EAGLE_Nonsmoker",
-                      "EAGLE_LUSC_LUNE","Lee-2017","Lee-2019","Leong-2019",
-                      "Imielinski"))%>%
-  left_join(wgs_full_annotations,by=c("Barcode"))%>%
-  filter(!str_detect(HISTOLOGY_COMPOSITE,"EXCLUDE"))%>%
-  filter(!sherlock_pid %in% sherlock_excluded$`Sherlock PID`)
-wgs_sherlockOnly<-
-  kraken_raw%>%
-  select(any_of(c("tax_id",wgs_nopublic$Barcode)))
+# excluded samples to remove
 
 # Read RNA Data
 rna <-
@@ -233,32 +169,11 @@ rna <-
   rename(tax_id = "4")%>%
   mutate_at("tax_id", as.character)
 
-# filter to only fresh-frozen samples with RNA extracted at nationwide, remove all identified metastases
-rna_nationwide_frozen_Samples <-
-  rna_annots%>%
-  left_join(read_delim("extra_data/RNA_extraction_batch.txt")%>%
-              select(`Sherlock PID`,`Tissue Attribute`,`Created By`,`Source Material`)%>%
-              unique(),
-            by=c("Sherlock_PID"="Sherlock PID","Type"="Tissue Attribute"))%>%
-  filter(str_detect(Dataset,"Sherlock"))%>%
-  drop_na(`Sherlock_PID`)%>%
-  replace_na(list(Comments="none"))%>%
-  filter(`Created By`=="Nationwide",
-         `Source Material`=="Frozen Tissue",
-         Comments %in% c("none","Tumor Only"),
-         str_detect(HISTOLOGY_COMPOSITE,"EXCLUDE", negate=TRUE),
-         !Sherlock_PID %in% sherlock_excluded$`Sherlock PID`)
-rna_NW_FF<-
-  rna%>%
-  select(any_of(c("tax_id",rna_nationwide_frozen_Samples$RNAseq_SampleID)))
-
 # 16s kraken
 s16_kraken <-
-  #read_delim("/Volumes/Sherlock_Lung/JohnMce/Kraken_16S2/s16_ncbi_bracken0.02_collated.txt")
   read_delim("/Volumes/Sherlock_Lung/JohnMce/Kraken_16S3/s16_nov24_test_collated.txt") %>%
   rename(tax_id = "4") %>%
   replace(is.na(.), 0) %>%
-  #filter(tax_id %in% kraken_microbeTaxonomy$tax_id)%>%
   `colnames<-`(str_replace(colnames(.), "Sample_", "") %>% str_replace("-[TCGA]*$", "")) %>%
   mutate_at("tax_id", as.character)
 s16_to_wgs <-
@@ -273,8 +188,50 @@ s16_to_wgs <-
   ) %>%
   filter(source_material == "Lung")
 
-## Not all mutational signatures were included in this table so I added them back
-## maybe some are unreliable?
+### remove 'bad' samples
+sherlock_excluded<-
+  read_delim("extra_data/Sherlock_Excluded.csv",delim = ",",col_names = T)%>%
+  drop_na(`Sherlock PID`)
+# Remove public data; too noisy
+wgs_nopublic<-
+  annotations_withClinical%>%
+  filter(Smoking=="Non-Smoker",
+         !Study %in%c("TCGA-legacy","TCGA-new","EAGLE_Smoker","EAGLE_Nonsmoker",
+                      "EAGLE_LUSC_LUNE","Lee-2017","Lee-2019","Leong-2019",
+                      "Imielinski"))%>%
+  left_join(wgs_full_annotations,by=c("Barcode"))%>%
+  filter(str_detect(HISTOLOGY_COMPOSITE,regex("EXCLUDE",ignore_case=TRUE),negate=TRUE))%>%
+  filter(!sherlock_pid %in% sherlock_excluded$`Sherlock PID`)
+wgs_sherlockOnly<-
+  kraken_raw%>%
+  select(any_of(c("tax_id",wgs_nopublic$Barcode)))
+# filter to only fresh-frozen samples with RNA extracted at nationwide, remove all identified metastases
+rna_nationwide_frozen_Samples <-
+  rna_annots_full%>%
+  left_join(read_delim("extra_data/RNA_extraction_batch.txt")%>%
+              select(`Sherlock PID`,`Tissue Attribute`,`Created By`,`Source Material`)%>%
+              unique(),
+            by=c("Sherlock_PID"="Sherlock PID","Type"="Tissue Attribute"))%>%
+  filter(str_detect(Dataset,"Sherlock"))%>%
+  drop_na(`Sherlock_PID`)%>%
+  replace_na(list(Comments="none"))%>%
+  filter(`Created By`=="Nationwide",
+         `Source Material`=="Frozen Tissue",
+         Comments %in% c("none","Tumor Only"),
+         !str_detect(HISTOLOGY_COMPOSITE,regex("EXCLUDE",ignore_case=TRUE)),
+         !Sherlock_PID %in% sherlock_excluded$`Sherlock PID`)
+rna_NW_FF<-
+  rna%>%
+  select(any_of(c("tax_id",rna_nationwide_frozen_Samples$RNAseq_SampleID)))
+## 16S 'bad' samples will be removed after scrubbing
+bad_16s_samples<-
+  s16_clinical_annos%>%
+  filter(is.na(STUDY_SITE)|
+           str_detect(HISTOLOGY_COMPOSITE,regex("EXCLUDE",ignore_case=TRUE))|
+           AdditionalAttributes %in% sherlock_excluded$`Sherlock PID`)%>%
+  pull(SampleID)
+
+## mutational signatures
 sherlock_data_full <-
   sherlock_sig_cosmic %>%
   pivot_longer(-1, names_to = "Gene", values_to = "Alteration") %>%
@@ -299,9 +256,6 @@ salter_list <-
   read_delim("extra_data/Salter_blacklist.txt", delim = "\t") %>%
   left_join(kraken_microbeTaxonomy, by = c("Genus" = "name")) %>%
   filter(type == "genus")
-# GRIMER_db <-
-#   read_delim("extra_data/GRIMER_db_ncbi.txt",delim = ", ",col_names = F)%>%
-#   `colnames<-`("tax_id")
 pathogen_v_host <-
   read_delim("extra_data/PathogenVsHostDB-2019-05-30.csv")
 salter_list_nonHuman <-
@@ -312,3 +266,5 @@ salter_list_nonHuman <-
                                            filter(n > 1) %>%
                                            pull(Genus)))) %>%
   filter(!Human_associated)
+
+

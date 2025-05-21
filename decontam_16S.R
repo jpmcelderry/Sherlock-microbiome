@@ -94,6 +94,8 @@ s16_preScrub<-
   column_to_rownames("tax_id")%>%
   select_if(colSums(.)>0)%>%
   t()
+s16_otus<-
+  read_delim("extra_data/Sherlock_Batch1/20210621_run_depth_1500/silva-132-99-515-806-nb-classifier/barplots_data_files/level-7.csv")
 
 # reformat 16s metadata for use with scrub
 scrub16s_metadata<-
@@ -132,7 +134,7 @@ scrubbed_data<-
   as.data.frame()%>%
   rownames_to_column("tax_id")
 
-# combine the scrubbed genus data back with raw family+ data
+# combine the scrubbed genus data back with raw >genus data
 s16_postScrub<-
   s16_kraken%>%
   select(colnames(scrubbed_data))%>%
@@ -146,9 +148,10 @@ s16_scrubbed_part1<-decontaminate_up_scrub(data = s16_postScrub,
 # remove known contaminators
 s16_scrubbed<-
   decontaminate_up(data = s16_scrubbed_part1,
-                               contaminants = c("1912216","561","1386",salter_list_nonHuman$tax_id),
-                               decontam_level = "genus",
-                   taxa_table = tax_table_16S)%>%.[[1]]%>%
+                   contaminants = c(salter_list_nonHuman$tax_id),
+                   decontam_level = "genus",
+                   taxa_table = tax_table_16S)%>%
+  .[[1]]%>%
   rownames_to_column("tax_id")
 # remove excluded sherlock samples (determined here based on missing study site info)
 bad_16s_samples<-
@@ -161,35 +164,6 @@ s16_scrubbed<-
   filter(tax_id %in% kraken_microbeTaxonomy$tax_id)
 
 ### 16S batch effect beta-diversity plots
-s16_batchBefore<-
-  s16_kraken%>%
-  replace(is.na(.),0)%>%
-  filter(tax_id %in% all_bact_genera)%>%
-  column_to_rownames("tax_id")%>%
-  filter(rowMeans(.>0)>0.05)%>%
-  select(any_of(colnames(s16_scrubbed)))%>%
-  t()%>%
-  avgdist(sample = 200,iterations=50)
-s16_batchBefore_cmdscale<-cmdscale(s16_batchBefore,list. = T,eig=T,k=10)
-s16_batchBefore_cmdscale$eig<-(s16_batchBefore_cmdscale$eig/sum(s16_batchBefore_cmdscale$eig))*100
-s16_batchBefore_plot<-
-  s16_batchBefore_cmdscale$points%>%
-  as.data.frame()%>%
-  `colnames<-`(paste0("PC",seq(1:10)))%>%
-  rownames_to_column("SampleID")%>%
-  left_join(s16_clinical_annos,by=c("SampleID"))%>%
-  ggplot(aes(x=PC1,y=PC2,group=PCR_Plate,label=NA))+
-  stat_ellipse(aes(color=PCR_Plate),show.legend = F)+
-  geom_point(aes(fill=PCR_Plate),shape=21,color="gray80")+
-  labs(x=paste0("PC1 (",round(s16_batchAfter_cmdscale$eig[1],1),"%)"),
-       y=paste0("PC2 (",round(s16_batchAfter_cmdscale$eig[2],1),"%)"),
-       fill="PCR Plate")+
-  scale_fill_manual(values=rev(SBScolor))+
-  scale_color_manual(values=rev(SBScolor))+
-  theme(legend.text = element_text(size=8))+
-  guides(fill=guide_legend(ncol=2))
-s16_batchBefore_plot
-
 s16_batchAfter<-
   s16_scrubbed%>%
   replace(is.na(.),0)%>%
@@ -198,7 +172,7 @@ s16_batchAfter<-
   filter(rowMeans(.>0)>0.05)%>%
   select(any_of(colnames(s16_scrubbed)))%>%
   t()%>%
-  avgdist(sample = 100,iterations=50)
+  avgdist(sample = 200,iterations=50)
 s16_batchAfter_cmdscale<-cmdscale(s16_batchAfter,list. = T,eig=T,k=10)
 s16_batchAfter_cmdscale$eig<-(s16_batchAfter_cmdscale$eig/sum(s16_batchAfter_cmdscale$eig))*100
 s16_batchAfter_plot<-

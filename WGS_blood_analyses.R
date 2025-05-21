@@ -16,30 +16,19 @@ blood_v_tissue<-
   blood_v_tissue[labels(blood_v_tissue_avgdist),]
 blood_v_tissue_results<-
   adonis2(formula=as.matrix(blood_v_tissue_avgdist)[rownames(blood_v_tissue),
-                                         rownames(blood_v_tissue)]~site_study+Tissue_Type,
-        data = blood_v_tissue,by = "margin",permutations = 999,parallel = 4)
+                                                    rownames(blood_v_tissue)]~site_study+Tissue_Type,
+        data = blood_v_tissue,
+        by = "margin",
+        permutations = 999,
+        parallel = 4)
 
 wgs_cmdscale<-
-  cmdscale(blood_v_tissue_avgdist,list. = T,eig=T,k=10)
+  cmdscale(blood_v_tissue_avgdist,
+           list. = T,eig=T,k=10)
 wgs_cmdscale$eig<-
   (wgs_cmdscale$eig/sum(wgs_cmdscale$eig))*100
-# loadings<-
-#   wgs_decontamd%>%
-#   select(tax_id,any_of(names(rna.adj.vars)))%>%
-#   filter(tax_id %in% all_bact_genera)%>%
-#   column_to_rownames("tax_id")%>%
-#   filter(rowMeans(.>2)>0.05)%>%
-#   .[,labels(blood_v_tissue_avgdist)]%>%
-#   apply(MARGIN = 2,FUN = function(x){x/sum(x)})%>%
-#   apply(MARGIN = 1,FUN = function(x){x/sum(x)})%>%
-#   t()%>%
-#   `%*%`(wgs_cmdscale$points)%>%
-#   as.data.frame()%>%
-#   `colnames<-`(paste0("PC",seq(1:10)))%>%
-#   rownames_to_column("tax_id")%>%
-#   left_join(kraken_taxonomy)%>%
-#   mutate(magnitude=sqrt(PC1^2+PC2^2))%>%
-#   arrange(-magnitude)
+
+# Plot
 TissueVBlood_betadiversity_plot<-
   wgs_cmdscale$points%>%
   as.data.frame()%>%
@@ -47,24 +36,23 @@ TissueVBlood_betadiversity_plot<-
   rownames_to_column("Barcode")%>%
   left_join(wgs_full_annotations)%>%
   mutate(Tissue_Type=if_else(Sample_Source=="Blood","Blood","Lung/Tumor"))%>%
-  filter(nlevels(as.factor(Tissue_Type))>1,
-         .by=SUBJECT_ID)%>%
-  # mutate(Sample_Source=paste0(Sample_Source,"\n(n=",n(),")"),.by=Tissue_Type)%>%
+  filter(nlevels(as.factor(Tissue_Type))>1,.by=SUBJECT_ID)%>%
+  # plotting
   ggplot(aes(x=PC1,y=PC2,group=Sample_Source,label=NULL))+
   geom_point(aes(fill=Sample_Source),color="gray80",shape=21)+
   stat_ellipse(geom="polygon",level=0.80,fill=NA,color="black",size=1.02)+
   stat_ellipse(aes(color=Sample_Source),geom="polygon",level=0.80,fill=NA)+
   labs(x=paste0("PC1 (",round(wgs_cmdscale$eig[1],1),"%)"),
        y=paste0("PC2 (",round(wgs_cmdscale$eig[2],1),"%)"))+
-  #geom_point(data=loadings[1:20,],aes(x=PC1,y=PC2),inherit.aes = F,shape=17)+
   labs(fill="Type",color="Type")+
   facet_wrap2(~"WGS",strip = strip_themed(background_x = element_rect(fill=WGS_color)))
-  
 TissueVBlood_betadiversity_plot
+
 ggsave("plots/current_plots/blood_betadiversity.pdf",device=cairo_pdf,width=7,height=6)
 ggsave("plots/current_plots/blood_betadiversity.png",device=png,width=7,height=6)
 
 ########## ALPHA DIVERISITY
+# Isolate blood samples from diversity/richness tables
 blood_diversity<-
   WGS_diversity%>%
   filter(Barcode %in% (annotations_withClinical%>%
@@ -75,7 +63,6 @@ blood_richness<-
   filter(Barcode %in% (annotations_withClinical%>%
                          filter(Sample_Source=="Blood")%>%
                          pull(Barcode)))
-  
 blood_ng232_diversity<-
   NG232_diversity%>%
   filter(Barcode %in% (annotations_withClinical%>%
@@ -87,6 +74,7 @@ blood_ng232_richness<-
                          filter(Sample_Source=="Blood")%>%
                          pull(Barcode)))
 
+# diversity-clinical associations
 map_Adiversity_blood<-
   function(adiversity,annos,testvar){
     testFormula<-as.formula(paste0("`100`~site_study+",testvar))
@@ -126,6 +114,7 @@ blood_meta_aDiversity<-
             .by=term)%>%
   mutate(meta_fdr=p.adjust(p.value))
 
+# richness-clinical association
 map_richness<-
   function(richness,annos,testvar){
     testFormula<-as.formula(paste0("N100~site_study+",testvar))
@@ -167,7 +156,9 @@ blood_meta_richness<-
             .by=term)%>%
   mutate(meta_fdr=p.adjust(p.value))
 
+# create diversity/richness forest plots
 bloodAdiver_forest<-
+  # Join tables and clean up labels
   rbind(blood_meta_aDiversity%>%mutate(metric="Blood Shannon diversity"),
           blood_meta_richness%>%mutate(metric="Blood genus richness"))%>%
   mutate_at("term",str_replace,pattern="SMOKE",replacement="SMOKING")%>%
@@ -178,6 +169,7 @@ bloodAdiver_forest<-
   mutate_at("term",str_replace,"i$","I")%>%
   mutate_at("term",str_replace,"v$","V")%>%
   filter(!str_detect(term,"99999"))%>%
+  # plot
   forestplot(name = term,
              estimate = estimate,
              se=std.error)+
@@ -192,8 +184,7 @@ bloodAdiver_forest$layers[[2]]<-NULL
 bloodAdiver_forest
 
 ########################################################################
-################## BETA DIVERSITY
-
+### BETA DIVERSITY
 blood_avgdist<-
   wgs_decontamd%>%
   filter(tax_id %in% all_bact_genera)%>%
@@ -212,7 +203,7 @@ ng232_blood_avgdist<-
   filter(rowMeans(.>0)>0.01)%>%
   t()%>%
   avgdist(100,iterations = 50)
-########## GET ANNOTATIONS
+########## Wrangle annotations
 big_model_bloodAnnos<-
   wgs_full_annotations%>%
   column_to_rownames("Barcode")%>%
@@ -236,7 +227,7 @@ big_model_bloodAnnos_ng232<-
   drop_na(VITAL_STATUS,STAGE_simple,HISTOLOGY_simple)%>%
   replace(is.na(.),"99999")
 
-########## RUN MODEL
+########## Run adonis model
 big_model_blood<-
   adonis2(formula=as.matrix(blood_avgdist)[rownames(big_model_bloodAnnos),
                                            rownames(big_model_bloodAnnos)]~site_study+STAGE_simple+HISTOLOGY_simple+RECURRENCE+VITAL_STATUS,
@@ -255,11 +246,11 @@ blood_beta_metaP<-
             .by=term)%>%
   mutate(meta.fdr=p.adjust(meta.p.value))
 
+# Plot adonis results
 betadiversity_blood<-
   blood_beta_metaP%>%
   filter(!term %in% c("Total","Residual"))%>%
-  mutate(term=str_to_title(str_replace(term,"_simple","")%>%
-                             str_replace("_"," ")))%>%
+  mutate(term=str_to_title(str_replace(term,"_simple","")%>%str_replace("_"," ")))%>%
   ggplot(aes(x=term,y=R2))+
   geom_bar(stat="identity",width=0.6,position = position_dodge())+
   geom_text(aes(label = case_when(meta.p.value<0.0001 ~ "****",
@@ -273,127 +264,6 @@ betadiversity_blood<-
   labs(y="Proportion of variance explained",x=NULL)+
   facet_wrap2(~"Blood beta diversity",strip = strip_themed(background_x = element_rect(fill=WGS_color)))
 betadiversity_blood
-
-### CHECK DIFFERENCES IN BETA-DISPERSION
-# betadisper_blood_annos<-
-#   big_model_bloodAnnos%>%
-#   rownames_to_column("Barcode")%>%
-#   pull(var = VITAL_STATUS,name = Barcode)
-# betadisper(as.dist(as.matrix(blood_avgdist)[names(betadisper_blood_annos),
-#                                             names(betadisper_blood_annos)]),
-#            group = betadisper_blood_annos)
-# 
-# 
-# # MERGE RESULTS, SAVE
-# big_model_blood%>%
-#   tidy()%>%
-#   arrange(p.value)%>%
-#   nice_table()
-# 
-# ### Differential abundance to probe stage differences
-# aldex_inBlood<-
-#   wgs_decontamd%>%
-#   filter(tax_id %in% all_bact_genera)%>%
-#   column_to_rownames("tax_id")%>%
-#   filter(rowMeans(.>0)>0.01)%>%
-#   select_if(colSums(.)>100)
-# 
-# aldex_Blood_annos<-
-#   wgs_full_annotations%>%
-#   filter(Barcode %in% colnames(aldex_inBlood),Sample_Source=="Blood")%>%
-#   drop_na(STAGE_simple)%>%
-#   filter(!STAGE_simple %in% c("X","99999"),!GRADE_DIFFERENTIATION %in% c("X","99999"))%>%
-#   pull(Barcode)
-# aldex_inBlood<-
-#   aldex_inBlood%>%
-#   select(aldex_Blood_annos)
-# 
-# aldex_out_Blood<-
-#   ALDEx2::aldex(reads=aldex_inBlood,
-#                 conditions = (wgs_full_annotations%>%
-#                                 filter(Barcode %in% aldex_Blood_annos)%>%
-#                                 mutate(Early_Stage= as.character(STAGE_simple=="I"))%>%
-#                                 pull(Early_Stage,Barcode)))
-# 
-# differential_abundanceBlood_stage<-
-#   aldex_out_Blood%>%
-#   rownames_to_column("tax_id")%>%
-#   left_join(kraken_taxonomy)%>%
-#   ggplot(aes(x=diff.btw,y=-log10(wi.ep),
-#              label=if_else(wi.ep<0.05,name,"")))+
-#   geom_point()+
-#   geom_text_repel(show.legend = FALSE,size=2.5)+
-#   geom_texthline(yintercept=-log10(0.00053),color="blue",
-#                  label="FDR=0.05",lty=2,family="Roboto Condensed",fontface="italic",
-#                  hjust=.9,size=3)+
-#   geom_texthline(yintercept=-log10(0.05),color="red",
-#                  label="p=0.05",lty=2,family="Roboto Condensed",fontface="italic",
-#                  hjust=.9,size=3)+
-#   labs(x="Difference between means",y="-log10(p.value)",color="FDR<0.05")+
-#   geom_vline(xintercept = 0,lty=3,alpha=0.5)+
-#   annotate("text",x = -Inf, y = -Inf, label="stages II-IV enriched",hjust=-0.1,vjust=-1,
-#            family="Roboto Condensed",fontface="italic",size=3.5)+
-#   annotate("text",x = Inf, y = -Inf, label="stage I enriched",hjust=1.1,vjust=-1,
-#            family="Roboto Condensed",fontface="italic",size=3.5)+xlim(-1,1)
-# differential_abundanceBlood_stage
-# 
-# #### plot draft 1
-# blood_clr<-
-#   wgs_decontamd%>%
-#   select(tax_id,any_of((wgs_full_annotations%>%
-#                           filter(Sample_Source=="Blood")%>%
-#                           pull(Barcode))))%>%
-#   filter(tax_id %in% all_bact_genera)%>%
-#   left_join(unified_taxonomy[,c("tax_id","name")])%>%
-#   column_to_rownames("name")%>%
-#   select(-tax_id)%>%
-#   select_if(colSums(.)>100)%>%
-#   filter(rowMeans(.>5)>0.1)%>%
-#   t()%>%clr(.+0.1)%>%t()%>%
-#   as.data.frame()
-# ## blood survival
-# setup_blood_surv_map<-
-#   blood_clr%>%
-#   t()%>%
-#   as.data.frame()%>%
-#   rownames_to_column("Barcode")%>%
-#   left_join(wgs_full_annotations)%>%
-#   drop_na(VITAL_STATUS,STAGE_simple,SURVIVAL_TIME_WEEKS_DERIVED)%>%
-#   mutate(VITAL_STATUS=(VITAL_STATUS%%2)+1)%>%
-#   mutate(vital_status_10Y=if_else(SURVIVAL_TIME_WEEKS_DERIVED>520,1,VITAL_STATUS),
-#          survival_weeks_10Y=if_else(SURVIVAL_TIME_WEEKS_DERIVED>520,520.0,SURVIVAL_TIME_WEEKS_DERIVED),
-#          stage_binned=if_else(STAGE_simple=="I","I","II/III/IV"),
-#          age_over_65=AGE_AT_DIAGNOSIS>65)
-# 
-# blood_survival_genera<-
-#   intersect(colnames(setup_blood_surv_map),kraken_taxonomy$name)
-# 
-# blood_survival<-
-#   map_dfr(blood_survival_genera,
-#           function(x){
-#             formula<-as.formula(paste0("survival~strata(site_study)+strata(age_over_65)+strata(stage_binned)+AGE_AT_DIAGNOSIS+`",x,"`"));
-#             survival<-Surv(setup_blood_surv_map$survival_weeks_10Y, setup_blood_surv_map$vital_status_10Y);
-#             coxph(formula,data = setup_blood_surv_map)%>%tidy()
-#           })%>%
-#   mutate(fdr=p.adjust(p.value,method="BH"))%>%
-#   filter(!str_detect(term,"_"),!term=="AlterationYes")%>%
-#   arrange(p.value)
-# blood_survival
-# 
-# blood_survival_plot<-
-#   blood_survival%>%
-#   arrange(-estimate)%>%
-#   mutate(experiment="WGS blood")%>%
-#   forestplot(name = term,
-#              estimate = estimate,
-#              se=std.error,
-#              pvalue = p.value)+
-#   labs(x="ln(Cox hazard ratio)")+
-#   theme_bw()+
-#   theme(axis.text.y=element_text(size=8),legend.text = element_text(size=8),legend.title = element_text(size = 10))+
-#   scale_color_manual(values = c("blue","red"))+
-#   facet_wrap2(~experiment,strip = strip_themed(background_x = element_rect(fill=WGS_color)))
-# blood_survival_plot
 
 plot_grid(bloodAdiver_forest,
           betadiversity_blood,

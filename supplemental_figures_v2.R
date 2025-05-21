@@ -1,59 +1,11 @@
 # Extended Data Fig 1 - Genus level composition barplot
-wgs_compOverview_in_genera <-
-  wgs_raw_combined %>%
-  as.data.frame() %>%
-  filter(tax_id %in% all_bact_genera) %>%
-  right_join(kraken_taxonomy, .) %>%
-  pivot_longer(-c(1:4), names_to = "Barcode", values_to = "Reads") %>%
-  mutate(Relabund = Reads / sum(Reads),
-         .by=Barcode) %>%
-  left_join(wgs_full_annotations[, c("Barcode", "Sample_Source", "sherlock_pid")],
-            by = c("Barcode")
-  ) %>%
-  filter(Sample_Source %in% c("Tumor", "Normal", "Blood")) %>%
-  mutate(experiment = paste0("WGS (n=", nlevels(as.factor(sherlock_pid)), " subjects)"), .after = "tax_id")
-s16_compOverview_in_genera <-
-  s16_scrubbed %>%
-  as.data.frame() %>%
-  filter(tax_id %in% all_bact_genera) %>%
-  right_join(kraken_taxonomy, .) %>%
-  pivot_longer(-c(1:4), names_to = "Barcode", values_to = "Reads") %>%
-  mutate(Relabund = Reads / sum(Reads),
-         .by=Barcode) %>%
-  left_join(s16_metadata[, c("SampleID", "Tumor-NormalStatus", "AdditionalAttributes")],
-            by = c("Barcode" = "SampleID")
-  ) %>%
-  filter(`Tumor-NormalStatus` %in% c("Tumor", "Normal")) %>%
-  mutate(experiment = paste0("16S (n=", nlevels(as.factor(AdditionalAttributes)), " subjects)"), .after = "tax_id")
-RNAseq_compOverview_in_genera <-
-  rna_rawCounts_decontamd %>%
-  as.data.frame() %>%
-  filter(tax_id %in% all_bact_genera) %>%
-  right_join(kraken_taxonomy, .) %>%
-  pivot_longer(-c(1:4), names_to = "Barcode", values_to = "Reads") %>%
-  mutate(Relabund = Reads / sum(Reads),
-         .by=Barcode) %>%
-  left_join(rna_annots[, c("RNAseq_SampleID", "Type", "Subject ID")],
-            by = c("Barcode" = "RNAseq_SampleID")
-  ) %>%
-  filter(Type %in% c("Tumor", "Normal")) %>%
-  mutate(experiment = paste0("RNA-seq (n=", nlevels(as.factor(`Subject ID`)), " subjects)"), .after = "tax_id")
-
-# compile datasets into final plot
 composition_plot_grid_genera <-
-  RNAseq_compOverview_in_genera %>%
-  rbind(s16_compOverview_in_genera %>% 
-          rename(Type = "Tumor-NormalStatus", `Subject ID` = "AdditionalAttributes")) %>%
-  rbind(wgs_compOverview_in_genera %>% 
-          rename(Type = "Sample_Source", `Subject ID` = "sherlock_pid")) %>%
+  # MERGE DATASETS
+  RNAseq_compOverview_in %>%
+  filter(type=="genus")%>%
+  rbind(s16_compOverview_in %>% rename(Type = "Tumor-NormalStatus", `Subject ID` = "AdditionalAttributes")) %>%
+  rbind(wgs_compOverview_in %>% rename(Type = "Sample_Source", `Subject ID` = "sherlock_pid")) %>%
   mutate(Type = factor(Type, levels = c("Normal", "Tumor", "Blood"))) %>%
-  mutate(name=case_when(name=="Pseudomonadota"~"Proteobacteria",
-                        name=="Actinomycetota"~"Actinobacteria",
-                        name=="Bacillota"~"Firmicutes",
-                        name=="Bacteroidota"~"Bacteroidetes",
-                        name=="Deinococcota"~"Deinoccocus-Thermus",
-                        TRUE~name
-  ))%>%
   graph_phyla_composition_barplot2(level = "genus", ordering_taxa = "Other", otus = 20) +
   facet_grid2(Type ~ experiment,
               scales = "free",
@@ -78,30 +30,9 @@ composition_plot_grid_genera <-
   scale_fill_manual(values = SBScolor) +
   labs(x = NULL, y = "Relative Abundance", fill = "Genus")
 composition_plot_grid_genera
+
 ggsave("plots/current_plots/composition_panels_genera.pdf",device = cairo_pdf,height=8,width=9)
 ggsave("plots/current_plots/composition_panels_genera.png",device = png,height=8,width=9)
-
-# Extended Data Fig 2 - Immune cell correlations -- this is no longer significant after improved batch correction
-# significant_normals_association<-
-#   richness_v_immuneCells%>%
-#   filter(Type=="Normal")%>%
-#   mutate(fdr=p.adjust(p.value))%>%
-#   filter(fdr<=0.05)%>%
-#   pull(Cell)
-# immune_cell_corrsSmooth<-
-#   rna_richness%>%
-#   left_join(rna_annots)%>%
-#   left_join(Danaher_immuneScore,by=c("RNAseq_SampleID"))%>%
-#   rename(Cell="Immune Cell")%>%
-#   filter(Type=="Normal")%>%
-#   drop_na(Cell)%>%
-#   #filter(Cell %in% significant_normals_association)%>%
-#   ggplot(aes(x=Score,y=N500))+
-#   geom_point(alpha=0.1)+
-#   geom_smooth(method="lm")+
-#   facet_wrap2(~Cell,scales="free",strip=strip_themed(background_x = element_rect(fill=RNA_color)))+
-#   stat_cor(method = "pearson",size=3)+
-#   labs(y="Bacterial Richness",x="Cell Score")
 
 plot_grid(richness_v_immuneCells_plot+guides(color=FALSE,size=FALSE),
                     diversity_v_immuneCells_plot+guides(color=FALSE,size=FALSE),
@@ -116,17 +47,53 @@ ggsave("plots/current_plots/immune_cells_supplement.png",device=png,width=9,heig
 # Extended Data Fig 3 - Genomics associations
 source("genomics_associations.R")
 
-# Supplementary Fig 1 + 4 - blood vs tissue betadiversity, blood diversity results
-source("WGS_blood_analyses.R")
+######## batch correction, supplemental figure 1
+WGS_batchCorrect_figures<-
+  plot_grid(
+    plot_grid(
+      WGS_batchBefore_plot+theme(legend.position = "none"),
+      plot_grid(
+        WGS_batchAfter_plot+theme(legend.position = "none"),
+        NG232_batchAfter_plot+theme(legend.position = "none"),
+        labels=c("b","c"),
+        rel_widths = c(1,1)
+      ),
+      labels = c("a"),rel_widths = c(1,1),nrow=2
+    ),
+    get_legend(WGS_batchBefore_plot),
+    nrow=1,ncol=2,rel_widths=c(1.5,.5)
+  )
+RNA_batchCorrect_figures<-
+  plot_grid(RNA_batchBefore_plot,
+            RNA_batchAfter_plot+theme(legend.position = "none"),
+            get_legend(RNA_batchAfter_plot),
+            labels = c("d","e",""),rel_widths = c(1,1,.5),nrow=1)
+s16_batchCorrect_figures<-
+  plot_grid(s16_batchAfter_plot+theme(legend.position = "none"),
+            get_legend(s16_batchAfter_plot),
+            NULL,labels=c("f",""),rel_widths = c(1,.5,1),
+            nrow=1)
 
-# Supplementary Fig 2 - ICC metrics
+plot_grid(WGS_batchCorrect_figures,
+          RNA_batchCorrect_figures,
+          s16_batchCorrect_figures,
+          ncol=1,rel_heights = c(2,1,1))
+ggsave("plots/current_plots/batch_correct.pdf",device=cairo_pdf,width=10,height=11,bg="white")
+ggsave("plots/current_plots/batch_correct.png",device=png,width=10,height=11,bg="white")
+
+# Supplementary Fig 2 - Raw data description
+source("raw_composition_supp.R")
+
+# Supplementary Fig 3 - ICC metrics
 source("ICC_metrics.R")
+# Relabunance correlations
 fs_ICCs_top<-
   plot_grid(WGS_16s_phylum_correlation,
             RNA_16s_phylum_correlation,
             RNA_WGS_phylum_correlation,
             labels=c("a","c","e"),
             ncol=1,rel_heights = c(0.3,0.45,0.3))
+# Diversity correlations
 fs_ICCs_bottom<-
   plot_grid(wgs_s16_diversity,
             rna_s16_diversity,
@@ -137,33 +104,33 @@ plot_grid(fs_ICCs_top,fs_ICCs_bottom,rel_widths = c(0.6,0.4))
 ggsave("plots/current_plots/ICC_correlations.pdf",device=cairo_pdf,width=9,height=8)
 ggsave("plots/current_plots/ICC_correlations.png",width=9,height=8)
 
-# Supplementary Figure 3 - species differential abundance, supplementary diversity info
+# Supplementary Figure 4 - species differential abundance, supplementary diversity info
 source("species_analysis.R")
 
 # betadiversity plot
 betaresults <-
+  # bind tables
   tidy(big_model_16s)%>% 
-  select(term, p.value, R2) %>%
-  mutate(fdr = p.adjust(p.value, method = "fdr"),Experiment = "16S") %>%
+    select(term, p.value, R2) %>%
+    mutate(fdr = p.adjust(p.value, method = "fdr"),Experiment = "16S") %>%
   rbind(
     tidy(big_model_rna2) %>% 
       select(term, p.value, R2) %>% 
-      mutate(fdr = p.adjust(p.value, method = "fdr"),Experiment = "RNA-seq")
-  ) %>%
+      mutate(fdr = p.adjust(p.value, method = "fdr"),Experiment = "RNA-seq")) %>%
   rbind(
     wgs_betadiver_meta_results %>% 
       mutate(Experiment = "WGS") %>% 
-      rename(fdr="meta.fdr",p.value="meta.p.value")
-  ) %>%
-  filter(!term %in% c("Residual", "Total", "SURGERY_LUNG_CANCER", "CHEMO_LUNG_CANCER", "RAD_THERAPY_LUNG_CANCER")) %>%
-  mutate(term = if_else(term %in% c("site_study", "Site_REF", "Study"), "Study Site", term)) %>%
-  mutate(fdr = p.adjust(p.value, method = "fdr")) %>%
+      rename(fdr="meta.fdr",p.value="meta.p.value")) %>%
+  filter(!term %in% c("Residual", "Total")) %>%
+  #mutate(fdr = p.adjust(p.value, method = "fdr")) %>%
+  # Pretty up labels
   mutate(term = case_when(
+    term %in% c("site_study", "Site_REF", "Study") ~ "Study Site",
     term == "Sample_Source" ~ "Tumor/Normal",
     term == "HISTOLOGY_COMPOSITE" ~ "Histology",
     term == "SEX_DERIVED" ~ "Sex",
     term == "STAGE_simple" ~ "Stage",
-    term == "ASTHMA" ~ "Asthma",
+    term == "METASTASIS" ~ "Metastasis",
     term == "GRADE_DIFFERENTIATION" ~ "Grade/Differentiation",
     term == "ANY_PREVIOUS_LUNG_DISEASE" ~ "Any Previous Lung Disease",
     term == "PASSIVE_SMOKE" ~ "Passive Smoke",
@@ -173,8 +140,10 @@ betaresults <-
     term == "AGE_AT_DIAGNOSIS" ~ "Age at Diagnosis",
     TRUE ~ term
   )) %>%
+  # plot
   ggplot(aes(
-    x = term, y = R2, fill = factor(Experiment, levels = c("16S", "RNA-seq","WGS")),
+    x = term, y = R2, 
+    fill = factor(Experiment, levels = c("16S", "RNA-seq","WGS")),
     group = factor(Experiment, levels = c("16S", "RNA-seq","WGS"))
   )) +
   geom_bar(stat = "identity", position = "dodge", width = 0.6) +
@@ -199,42 +168,57 @@ plot_grid(
             betaresults+theme(legend.position = "top"),
             labels = c("c","d"),nrow=1),
   ncol=1,align="hv"
-  )
+)
 ggsave(filename = "plots/current_plots/suppFigure_diveristyClinical.pdf",device=cairo_pdf,width=8,height=8,bg = "white")
 ggsave(filename = "plots/current_plots/suppFigure_diveristyClinical.png",device=png,width=8,height=8,bg = "white")
 
-# Supplementary Figure 4 - see Supp Figure 1 code
+# Supplementary Fig 4 - blood diversity results
+source("WGS_blood_analyses.R")
 
-# Supplementary Figure 5 - richness/diversity survival
-plot_grid(survivalRichness+theme(legend.text = element_text(size=10),legend.title = element_text(size=10)),
-          survivalDiversity+theme(legend.text = element_text(size=10),legend.title = element_text(size=10)),
-          survivalRichness_16S+theme(legend.text = element_text(size=10),legend.title = element_text(size=10)),
-          survivalDiversity_16s+theme(legend.text = element_text(size=10),legend.title = element_text(size=10)),
-          survivalRichness_wgs+theme(legend.text = element_text(size=10),legend.title = element_text(size=10)),
-          survivalDiversity_wgs+theme(legend.text = element_text(size=10),legend.title = element_text(size=10)),
-          Blood_survivalRichness_wgs+theme(legend.text = element_text(size=10),legend.title = element_text(size=10)),
-          Blood_survivalDiversity_wgs+theme(legend.text = element_text(size=10),legend.title = element_text(size=10)),
-          labels = c("a","b","c","d","e","f","g","h"),ncol=2)
+# Supplementary Figure 5 - see Supp Figure 1 code
+
+# Supplementary Figure 6 - richness/diversity survival
+# calculated in *_survival.R scripts
+plot_grid(survivalRichness+
+            theme(legend.text = element_text(size=10),legend.title = element_text(size=10)),
+          survivalDiversity+
+            theme(legend.text = element_text(size=10),legend.title = element_text(size=10)),
+          survivalRichness_16S+
+            theme(legend.text = element_text(size=10),legend.title = element_text(size=10)),
+          survivalDiversity_16s+
+            theme(legend.text = element_text(size=10),legend.title = element_text(size=10)),
+          survivalRichness_wgs+
+            theme(legend.text = element_text(size=10),legend.title = element_text(size=10)),
+          survivalDiversity_wgs+
+            theme(legend.text = element_text(size=10),legend.title = element_text(size=10)),
+          Blood_survivalRichness_wgs+
+            theme(legend.text = element_text(size=10),legend.title = element_text(size=10)),
+          Blood_survivalDiversity_wgs+
+            theme(legend.text = element_text(size=10),legend.title = element_text(size=10)),
+          labels = c("a","b","c","d","e","f","g","h"),
+          ncol=2)
 ggsave(filename = "plots/current_plots/survival_diversity.pdf",device = cairo_pdf,height=9,width=8,bg="white")
 ggsave(filename = "plots/current_plots/survival_diversity.png",device = png,height=9,width=8,bg="white")
 
-# Supplementary Figure 6 - LUAD richness/diversity survival
-source("Survival_adenos_only.R")
+# Supplementary Figure 7 - LUAD richness/diversity survival calculated with figure 4
 
-#### Supplementary Figure 7 - CONFIDENCE SCORE DATA
+#### Supplementary Figure 8 - CONFIDENCE SCORE DATA
 testing_confidence<-
-  read_delim('/Volumes/Sherlock_Lung/JohnMce/insilicoseq/round2/simulation-50000-all.txt',col_names = F)
-testing_confidenceSpec<-testing_confidence%>%
+  read_delim('kraken_out/simulation-50000-all.txt',col_names = F)
+testing_confidenceSpec<-
+  testing_confidence%>%
   mutate(X3=str_split(X3," \\(taxid "))%>%
   unnest_wider(X3,names_sep = "classification")%>%
   mutate(X3classification2=str_replace(X3classification2,"\\)",""))%>%
   left_join(kraken_taxonomy%>%mutate(tax_id=as.character(tax_id)),by=c("X3classification2"="tax_id"))%>%
   filter(type=="species")
-true_positives<-c("Escherichia coli","Pseudomonas aeruginosa","Klebsiella pneumoniae",
-                  "Prevotella melaninogenica","Rothia mucilaginosa",
-                  "Haemophilus parainfluenzae","Cutibacterium acnes",
-                  "Moraxella osloensis","Staphylococcus epidermidis",
-                  "Corynebacterium tuberculostearicum","Streptococcus oralis","Homo sapiens")
+true_positives<-c("Escherichia coli","Pseudomonas aeruginosa",
+                  "Klebsiella pneumoniae","Prevotella melaninogenica",
+                  "Rothia mucilaginosa","Haemophilus parainfluenzae",
+                  "Cutibacterium acnes","Moraxella osloensis",
+                  "Staphylococcus epidermidis","Corynebacterium tuberculostearicum",
+                  "Streptococcus oralis","Homo sapiens")
+# PLOT
 testing_confidenceSpec%>%
   mutate(truePos=if_else(name %in% true_positives,
                          name ,"False Positive"))%>%
@@ -248,7 +232,26 @@ testing_confidenceSpec%>%
 ggsave("plots/current_plots/confidences_benchmarking.pdf",device = cairo_pdf,height=5,width=7)
 ggsave("plots/current_plots/confidences_benchmarking.png",device = png,height=5,width=7)
 
-#### Supplementary Figure 8 - Contamination fractions in 16S data using SCRuB
+#### Supplementary Figure 9 - Contamination fractions in 16S data using SCRuB
+# genus-level composition
+negatives_composition<-
+  s16_kraken%>%
+  select(tax_id,starts_with("NTC"),starts_with("Water"))%>%
+  filter(tax_id %in% (unified_taxonomy%>%
+                        filter(type=="genus",str_detect(taxonomy,"Bacteria"))%>%
+                        pull(tax_id)))%>%
+  pivot_longer(-1, names_to = "Barcode",values_to = "Reads")%>%
+  mutate(Relabund=Reads/sum(Reads),.by=Barcode)%>%
+  left_join(s16_metadata,by=c("Barcode"="SampleID"))%>%
+  left_join(unified_taxonomy)%>%
+  graph_phyla_composition_barplot2(level = "genus", ordering_taxa = "Other", otus = 20) +
+  facet_grid2(~ `Source Material` ,
+              scales = "free",
+              independent = "x",
+              render_empty = F)+
+  xlab(NULL)
+
+# merge per-sample contamination fraction values
 contamination_percents<-
   lapply(scrub_results_full,
          function(x){
@@ -258,7 +261,6 @@ contamination_percents<-
   t()%>%
   as.data.frame()%>%
   rownames_to_column("SampleID")
-
 contamination_percents_simple<-
   lapply(scrub_results_full,
          function(x){1-x$p})%>%
@@ -267,23 +269,8 @@ contamination_percents_simple<-
   as.data.frame()%>%
   rownames_to_column("SampleID")%>%
   rename(Proportion=".")
-negatives_composition<-
-  s16_kraken%>%
-  select(tax_id,starts_with("NTC"),starts_with("Water"))%>%
-  filter(tax_id %in% (unified_taxonomy%>%
-           filter(type=="genus",str_detect(taxonomy,"Bacteria"))%>%
-           pull(tax_id)))%>%
-  pivot_longer(-1, names_to = "Barcode",values_to = "Reads")%>%
-  mutate(Relabund=Reads/sum(Reads),.by=Barcode)%>%
-  left_join(s16_metadata,by=c("Barcode"="SampleID"))%>%
-  left_join(unified_taxonomy)%>%
-  graph_phyla_composition_barplot2(level = "genus", ordering_taxa = "Other", otus = 20) +
-  facet_grid2(~ `Source Material` ,
-              scales = "free",
-              independent = "x",
-              render_empty = F
-  )+
-  xlab(NULL)
+
+# plot contamination percents
 contamination_percents_plot<-
   contamination_percents%>%
   pivot_longer(-1,names_to = "Control",values_to = "Contamination Fraction")%>%
@@ -297,40 +284,3 @@ plot_grid(negatives_composition,
           ncol=1,labels = c("a","b"))
 ggsave("plots/current_plots/contamination_fractions.png",device = png,width=7,height=7)
 ggsave("plots/current_plots/contamination_fractions.pdf",device = cairo_pdf,width=7,height=7)
-
-######## batch correction supplemental figure - unused
-
-WGS_batchCorrect_figures<-
-  plot_grid(
-    plot_grid(
-      WGS_batchBefore_plot+theme(legend.position = "none"),
-      plot_grid(
-        WGS_batchAfter_plot+theme(legend.position = "none"),
-        NG232_batchAfter_plot+theme(legend.position = "none"),
-        labels=c("b","c"),
-        rel_widths = c(1,1)
-      ),
-      labels = c("a"),rel_widths = c(1,1),nrow=2
-    ),
-    get_legend(WGS_batchBefore_plot),
-    nrow=1,ncol=2,rel_widths=c(1.5,.5)
-  )
-
-RNA_batchCorrect_figures<-
-  plot_grid(RNA_batchBefore_plot,
-            RNA_batchAfter_plot+theme(legend.position = "none"),
-            get_legend(RNA_batchAfter_plot),
-            labels = c("d","e",""),rel_widths = c(1,1,.5),nrow=1)
-s16_batchCorrect_figures<-
-  plot_grid(s16_batchAfter_plot+theme(legend.position = "none"),
-          get_legend(s16_batchAfter_plot),
-          NULL,labels=c("f",""),rel_widths = c(1,.5,1),
-          nrow=1)
-plot_grid(WGS_batchCorrect_figures,
-          RNA_batchCorrect_figures,
-          s16_batchCorrect_figures,
-          ncol=1,rel_heights = c(2,1,1))
-ggsave("plots/current_plots/batch_correct.pdf",device=cairo_pdf,width=10,height=11,bg="white")
-ggsave("plots/current_plots/batch_correct.png",device=png,width=10,height=11,bg="white")
-
-

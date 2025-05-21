@@ -21,14 +21,6 @@ rna_combat_in<-
   rna_combat_in%>%
   filter(rowMeans(.>0)>0.01)
 
-# rna_PLSDA_out<-
-#   PLSDA_batch(rna_plsda_in,
-#               Y.trt = rna_bio.var,
-#               Y.bat = rna.adj.vars,
-#               ncomp.trt = nlevels(as.factor(rna.bio.vars))-1,
-#               ncomp.bat = nlevels(as.factor(rna.adj.vars))-1,
-#               balance=FALSE)
-
 rna_combatd_decontamd<-
   rna_combat_in%>%
   filter(rownames(.) %in% (unified_taxonomy%>%
@@ -59,7 +51,7 @@ rna_combatd_decontamd_phylum<-
 rna_rawCounts_decontamd<-
   decontaminate_up(rna_combat_in%>%
                      rownames_to_column("tax_id"),
-                   contaminants = salter_list_nonHuman$tax_id,
+                   contaminants = c(salter_list_nonHuman$tax_id),
                    decontam_level = "genus",
                    taxa_table = tax_table)%>%
   .[[1]]%>%
@@ -67,11 +59,11 @@ rna_rawCounts_decontamd<-
 
 ## Before batch correction
 RNA_batchBefore<-
-  rna%>%
+  rna_NW_FF%>%
   replace(is.na(.),0)%>%
   filter(tax_id %in% all_bact_genera)%>%
   column_to_rownames("tax_id")%>%
-  filter(rowMeans(.>=5)>0.05)%>%
+  filter(rowMeans(.>=2)>0.05)%>%
   select(any_of(colnames(rna_combatd_decontamd)))%>%
   t()%>%
   avgdist(sample = 500,iterations=50)
@@ -104,12 +96,9 @@ RNA_batchAfter<-
   rna_combatd_decontamd%>%
   column_to_rownames("tax_id")%>%
   floor()%>%
-  t()%>%as.data.frame()%>%select(-any_of(salter_list_nonHuman$tax_id))%>%
+  t()%>%as.data.frame()%>%
+  select(-any_of(salter_list_nonHuman$tax_id))%>%
   avgdist(sample = 500,iterations=50)
-# RNA_batchAfter<-
-#   rna_PLSDA_out$X.nobatch%>%
-#   as.data.frame()%>%
-#   vegdist(method="euclidean")
 RNA_batchAfter_cmdscale<-
   cmdscale(RNA_batchAfter,list. = T,eig=T,k=10)
 RNA_batchAfter_cmdscale$eig<-

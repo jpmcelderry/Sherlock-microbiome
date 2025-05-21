@@ -1,11 +1,13 @@
 ######## FIGURE 1
 ## 1a
+# combine NG232 and rest of Sherlock WGS into one
 wgs_raw_combined<-
   wgs_rawCounts_decontamd%>%
   full_join(ng232_rawCounts_decontamd)%>%
   replace(is.na(.),0)
 
 data_upset_plot <-
+  # merge datasets and metadata
   rna_annots_full %>%
   filter(RNAseq_SampleID %in% c(colnames(rna_combatd_decontamd))) %>%
   select(Sherlock_PID, Type, ANCESTRY_DERIVED, STUDY_SITE,Barcode="RNAseq_SampleID") %>%
@@ -21,6 +23,7 @@ data_upset_plot <-
           select(Sherlock_PID = "sherlock_pid", Type = "Sample_Source", ANCESTRY_DERIVED, STUDY_SITE, Barcode) %>%
           mutate(Data = "WGS") %>%
           distinct(Sherlock_PID,Type,.keep_all = T)) %>%
+  # reformat for sankey
   mutate(Type = str_replace(Type, "Lung", "Normal")) %>%
   summarise(Data = list(Data),IDs=list(Barcode),.by=c(Sherlock_PID, Type)) %>%
   left_join(sherlock_metaTable) %>%
@@ -33,18 +36,13 @@ data_upset_plot <-
 sankey_in <-
   data_upset_plot %>%
   drop_na(Type, Data) %>%
-  mutate(sample_status = sapply(Data, 
-                                function(x){
-                                  paste0(x, collapse = " +\n")
-                                  }
-                                )) %>%
-  mutate(Overlap = if_else(str_detect(sample_status, "\\+"),
-                                   sample_status,
-                                   paste0(sample_status, " only")
-  )) %>%
+  # reformat node strings
+  mutate(sample_status = sapply(Data,function(x){paste0(x, collapse = " +\n")})) %>%
+  mutate(Overlap = if_else(str_detect(sample_status, "\\+"),sample_status,paste0(sample_status, " only"))) %>%
   mutate_at("Overlap", fct_lump_n, n = 4, other_level = "All other") %>%
   unnest_longer(col = Data)%>%
   make_long(Data, `Tissue Type` = "Type",Overlap) %>%
+  # manually set order for plotting
   mutate_at("next_node", factor, levels = c("All other",
                                        "WGS only",
                                        "16S +\nWGS",
@@ -101,8 +99,7 @@ workflow_grob <-
 workflow <- ggplot() +
   geom_blank() +
   annotation_custom(workflow_grob,
-                    xmin = -Inf, xmax = Inf, ymin = -Inf, ymax = Inf
-  ) +
+                    xmin = -Inf, xmax = Inf, ymin = -Inf, ymax = Inf) +
   theme(plot.background = element_rect(color = "white")) +
   theme_classic()
 workflow
@@ -134,7 +131,7 @@ s16_kingdoms<-
   filter(tax_id %in% highest_level_clades|tax_id==0)%>%
   select(any_of(colnames(s16_scrubbed)))%>%
   mutate_at("tax_id",as.character)
-#### Bar plots by kingdom
+#### Bar plots by kingdom + H.sapiens
 kingdoms_bar<-
   RNA_kingdoms%>%
   full_join(WGS_kingdoms)%>%
@@ -150,6 +147,7 @@ kingdoms_bar<-
 kingdom_barplot<-
   kingdoms_bar%>%
   replace_na(list(name="unknown"))%>%
+  # remove some very low abundance taxa
   filter(!name %in% c("Metazoa","Sangervirae","Orthornavirae","Eukaryota"))%>%
   ggplot(aes(x=fct_relevel(name,"unknown",after = Inf),y=log10(Reads+1),fill=Experiment))+
   geom_boxplot(outlier.alpha = 0.2)+
@@ -157,9 +155,9 @@ kingdom_barplot<-
   scale_fill_brewer(type = "qual")+
   labs(x="",fill="dataset",y="log10 Median Reads")
 kingdom_barplot
-# ggsave("plots/current_plots/Read_totals.pdf",device=cairo_pdf,width=8,height=4)
 
 ###### BACTERIAL PROPORTIONS - Fig 1d
+# calculate reads-per-million for WGS
 wgs_bacterial_proportions<-
   read_delim("extra_data/AlignmentStats.txt")%>%
   filter(CATEGORY=="PAIR")%>%
@@ -172,13 +170,13 @@ wgs_bacterial_proportions<-
   drop_na(Bacteria)%>%
   mutate(Bact_proportion=Bacteria/TOTAL_READS*1e6)
 
+# calculate reads-per-million for RNA
 rna_total_reads<-
   read_delim("extra_data/RNAseq_QC.txt")%>%
   mutate_at("Features",trimws)%>%
   filter(Features=="Number of input reads")%>%
   pivot_longer(-Features,names_to = "RNAseq_SampleID",values_to = "TOTAL_READS")%>%
   select(-Features)
-
 rna_bacterial_proportions<-
   rna%>%
   filter(tax_id=="2")%>%
@@ -187,12 +185,12 @@ rna_bacterial_proportions<-
   mutate(Bact_proportion=Bacteria/as.numeric(TOTAL_READS)*1e6)%>%
   left_join(rna_annots)
 
+# calculate reads-per-million for 16S
 s16_total_reads<-
   read_delim("extra_data/read_counts_16S.txt2")%>%
   mutate_at("Sample",str_replace,"Sample_","")%>%
   mutate_at("Sample",str_replace,"-[ATCG]*$","")%>%
   rename(SampleID="Sample")
-
 s16_bacterial_proportions<-
   s16_total_reads%>%
   left_join(s16_kraken%>%
@@ -205,11 +203,12 @@ s16_bacterial_proportions<-
   drop_na(`2`)%>%
   mutate(Bact_proportion=`2`/TOTAL_READS*1e6)
 
+# merge reads-per-million 
 bacterial_proportions_data<-
   wgs_bacterial_proportions%>%
-  select(Barcode,Sample_Source,Bact_proportion)%>%
-  mutate(Experiment="WGS")%>%
-  mutate_at("Sample_Source",str_replace,"Lung","Normal")%>%
+    select(Barcode,Sample_Source,Bact_proportion)%>%
+    mutate(Experiment="WGS")%>%
+    mutate_at("Sample_Source",str_replace,"Lung","Normal")%>%
   rbind(rna_bacterial_proportions%>%
           select(Barcode="RNAseq_SampleID",Sample_Source="Type",Bact_proportion)%>%
           mutate(Experiment="RNA-seq")%>%
@@ -219,68 +218,35 @@ bacterial_proportions_data<-
           mutate(Experiment="16S")%>%
           filter(Barcode %in% colnames(s16_scrubbed)))%>%
   filter(Sample_Source %in% c("Blood","Normal","Tumor"))
-
+# plot
 bacterial_proportions_boxplot<-
   bacterial_proportions_data%>%
   ggplot(aes(x=factor(Sample_Source,levels=c("Tumor","Normal","Blood")),
-             y=log10(Bact_proportion),fill=Experiment))+
+             y=log10(Bact_proportion),
+             fill=Experiment))+
   geom_boxplot(position=position_dodge2(preserve = "single"),width=0.6,outliers = F)+
   labs(x=NULL,y="log10 Bacterial Reads Per Million")+
   scale_fill_brewer(type = "qual")+
   theme(axis.title.y = element_text(size=10))
 bacterial_proportions_boxplot
 
-## 1e
-## Compile samples that are shared between platforms
-paired_rna_wgs<-
-  rna_annots%>%
-  mutate(Sherlock_PID=paste0(Sherlock_PID,"_",Type))%>%
-  select(SampleID=RNAseq_SampleID,Sherlock_PID)%>%
-  mutate(Sherlock_PID=str_replace(Sherlock_PID,"NSLC-",""),experiment="RNA")%>%
-  rbind(broad_big_list%>%
-          filter(source_material=="Lung")%>%
-          mutate(Sherlock_PID=paste0(sherlock_pid,"_",tissue_attribute))%>%
-          select(SampleID=Barcode,Sherlock_PID)%>%
-          mutate(experiment="WGS"))
-
-paired_wgs_16s<-
-  broad_big_list%>%
-  filter(source_material=="Lung")%>%
-  mutate(Sherlock_PID=paste0(sherlock_pid,"_",tissue_attribute))%>%
-  select(SampleID=Barcode,Sherlock_PID)%>%
-  mutate(experiment="WGS")%>%
-  rbind(s16_metadata%>%
-          mutate(Sherlock_PID=paste0(AdditionalAttributes,"_",`Tumor-NormalStatus`))%>%
-          select(SampleID,Sherlock_PID)%>%
-          mutate(Sherlock_PID=str_replace(Sherlock_PID,"NSLC-",""),experiment="16s"))
-
-samples_crossPlatform<-
-  paired_wgs_16s%>%
-  pivot_wider(names_from = "experiment",values_from = "SampleID")%>%
-  full_join(paired_rna_wgs%>%
-              pivot_wider(names_from = "experiment",values_from = "SampleID"))%>%
-  drop_na()%>%
-  mutate_at(c("WGS","16s","RNA"),as.character)%>%
-  filter(WGS %in% colnames(wgs_raw_combined),
-         `16s` %in% colnames(s16_scrubbed),
-         RNA %in% colnames(rna_combatd_decontamd))%>%
-  pivot_longer(c("WGS","16s","RNA"),names_to = "platform",values_to = "Barcode")
-
-### Create table with all tumor normal status info, cross-platform
+## Figure 1e
+### Create table with all tumor-normal metadata
 all_sample_TNstatus<-
-  c(annotations_withClinical$Barcode,
-    s16_metadata$SampleID,
-    rna_annots$RNAseq_SampleID)%>%
-  as.data.frame()%>%
-  rename(Barcode=".")%>%
+  rbind(annotations_withClinical%>%select(Barcode),
+    s16_metadata%>%select(Barcode="SampleID"),
+    rna_annots%>%select(Barcode="RNAseq_SampleID"))%>%
   left_join(annotations_withClinical[,c("Barcode","Sample_Source")]%>%
               mutate(type="WGS"))%>%
-  mutate(Sample_Source=if_else(Sample_Source=="Lung","Normal",Sample_Source))%>%
+  mutate(Sample_Source=str_replace(Sample_Source,"Lung","Normal"))%>%
+  # merge RNA metadata
   left_join(rna_annots[,c("RNAseq_SampleID","Type")]%>%
-              mutate(type="RNA"),by=c("Barcode"="RNAseq_SampleID"))%>%
+              mutate(type="RNA"),
+            by=c("Barcode"="RNAseq_SampleID"))%>%
   mutate(Source=if_else(is.na(Sample_Source),Type,Sample_Source),
          type=if_else(is.na(type.x),type.y,type.x))%>%
   select(Barcode,type,Source)%>%
+  # merge 16S metadata
   left_join(s16_metadata[,c("SampleID","Tumor-NormalStatus")]%>%
               mutate(type="16s")%>%
               replace_na(list(`Tumor-NormalStatus`="NTC")),
@@ -289,11 +255,12 @@ all_sample_TNstatus<-
          type=if_else(is.na(type.x),type.y,type.x))%>%
   select(Barcode,dataset=type,Source)
 
+# merge datasets for plotting
 compare_read_counts<-
   rna%>%
   full_join(s16_kraken)%>%
   full_join(kraken_raw)%>%
-  left_join(kraken_taxonomy)%>%
+  left_join(unified_taxonomy)%>%
   filter(type=="superkingdom",str_detect(taxonomy,"Bacteria"))%>%
   select(where(is.numeric))%>%
   replace(is.na(.),0)%>%
@@ -304,7 +271,8 @@ compare_read_counts<-
                         colnames(rna_combatd_decontamd),
                         colnames(wgs_raw_combined)))%>%
   left_join(all_sample_TNstatus)
-# plot read totals
+
+# plot
 seqs_reads_boxplot<-
   compare_read_counts%>%
   mutate(Source=if_else(Source %in% c("Buccal","Saliva"),"Buccal/Saliva",Source))%>%
@@ -321,6 +289,7 @@ seqs_reads_boxplot<-
   labs(x=element_blank(),y="log10 Bacterial Reads")
 
 ## 1f
+# load HMP data
 hmp_data <-
   read_delim("extra_data/HMP_data/hmps-braken-conf.1-collated.txt") %>%
   pivot_longer(-1, names_to = "sample_id", values_to = "Reads") %>%
@@ -339,7 +308,7 @@ hmp_readCounts <-
   mutate(sample_body_site = paste0("HMP ", sample_body_site)) %>%
   mutate(Source = "Re-analyzed")
 
-# Numbers here for calculating reads/million come from the Gihawi paper
+# Numbers for calculating reads/million come from the Gihawi paper main text, represent mean reads
 Gihawi_results <-
   read_delim("extra_data/BLCA_gihawi.txt") %>%
   pivot_longer(-1, names_to = "name", values_to = "Reads") %>%
@@ -352,19 +321,19 @@ Gihawi_results <-
           pivot_longer(-1, names_to = "name", values_to = "Reads") %>%
           mutate_at("name", str_replace, "g_", "") %>%
           mutate(tissue = "Gihawi-PCAWG HNSC",TOTAL_READS = 258961253944/334)) %>%
-  # filter(!name %in% salter_list_nonHuman$Genus) %>%
   summarise(Reads = sum(Reads),.by=c(Sample, tissue,TOTAL_READS)) %>%
   mutate(Source = "Public",Reads_per_million=Reads/TOTAL_READS*1e6)%>%
   select(Sample,tissue,Source,TOTAL_READS,Reads,Reads_per_million)
 
+# format Sherlock WGS and RNAseq reads per million
 wgs_reads_comparison <-
   kraken_raw %>%
   pivot_longer(-1, names_to = "Barcode", values_to = "Reads") %>%
+  # wrangle data and label samples
   filter(
     Barcode %in% colnames(wgs_raw_combined) | str_detect(Barcode, "TCGA"),tax_id %in% all_bact_genera
   ) %>%
   left_join(annotations_withClinical) %>%
-  #filter(!tax_id %in% salter_list_nonHuman$tax_id) %>%
   filter(Sample_Source == "Tumor") %>%
   mutate(Sample_Source = case_when(
     str_detect(Barcode, "TCGA") & Smoking == "Smoker" ~ "PCAWG Smoker LUAD",
@@ -373,6 +342,7 @@ wgs_reads_comparison <-
   )) %>%
   summarise(Reads = sum(Reads, na.rm = T),.by=c(Barcode, Sample_Source)) %>%
   mutate(Source = if_else(str_detect(Barcode, "TCGA"), "Re-analyzed", "Sherlock"))%>%
+  # calculate reads per million
   left_join(wgs_read_depth)%>%
   drop_na(TOTAL_READS)%>%
   mutate(Reads_per_million=Reads/TOTAL_READS*1e6)%>%
@@ -381,12 +351,11 @@ wgs_reads_comparison <-
 rna_reads_comparison <-
   rna %>%
   pivot_longer(-1, names_to = "RNAseq_SampleID", values_to = "Reads") %>%
+  # wrangle data and label samples
   filter(
     RNAseq_SampleID %in% colnames(rna_combatd_decontamd) | str_detect(RNAseq_SampleID, "TCGA"),
-    tax_id %in% all_bact_genera
-  ) %>%
+    tax_id %in% all_bact_genera) %>%
   left_join(rna_annots[, c("RNAseq_SampleID", "Type", "SMOKING_HISTORY_txt")]) %>%
-  #filter(!tax_id %in% salter_list_nonHuman$tax_id) %>%
   filter(Type == "Tumor") %>%
   mutate(Type = case_when(
     str_detect(RNAseq_SampleID, "TCGA") & SMOKING_HISTORY_txt == "smoker" ~ "TCGA LUAD/LUSC RNA",
@@ -396,17 +365,18 @@ rna_reads_comparison <-
   )) %>%
   summarise(Reads = sum(Reads, na.rm = T),.by=c(RNAseq_SampleID, Type)) %>%
   mutate(Source = if_else(str_detect(RNAseq_SampleID, "TCGA"), "Re-analyzed", "Sherlock"))%>%
+  # calculate reads per million
   left_join(rna_total_reads)%>%
   mutate(Reads_per_million=Reads/as.numeric(TOTAL_READS)*1e6)%>%
   select(RNAseq_SampleID,Source,Type,TOTAL_READS,Reads,Reads_per_million)
 
 multiOrgan_comparison_fig <-
-  Gihawi_results %>%
-  mutate(Source = "Public",dataset="WGS") %>%
-  #rbind(hmp_readCounts %>% rename(Sample = "sample_id", tissue = "sample_body_site")) %>%
+  # merge datasets
+  Gihawi_results %>%mutate(Source = "Public",dataset="WGS") %>%
   rbind(wgs_reads_comparison %>% rename(Sample = "Barcode", tissue = "Sample_Source")%>%mutate(dataset="WGS")) %>%
-  rbind(rna_reads_comparison %>% rename(Sample = "RNAseq_SampleID",tissue="Type")%>%mutate(dataset="RNA-seq")) %>%
+  #rbind(rna_reads_comparison %>% rename(Sample = "RNAseq_SampleID",tissue="Type")%>%mutate(dataset="RNA-seq")) %>%
   filter(!tissue == "??") %>%
+  # plot
   ggplot(aes(
     x = fct_reorder(tissue, .x = Reads_per_million, .fun = median, .desc = T),
     y = log10(Reads_per_million), fill = Source
@@ -431,7 +401,7 @@ plot_grid(
                       seqs_reads_boxplot + guides(fill = "none"),
                       fig1_legend,labels=c("d","e",""),rel_widths = c(1, 1,.5),nrow=1),
             multiOrgan_comparison_fig,labels = c("c","","f"),
-            nrow=3,ncol=1,align="hv",rel_heights = c(0.4,0.3,0.4)),
+            nrow=3,ncol=1,rel_heights = c(0.4,0.3,0.4)),
   labels = c("a","",""), rel_widths = c(0.45, 0.55))
 
 ggsave("plots/current_plots/fig1_v1.pdf",

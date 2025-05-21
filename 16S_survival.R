@@ -19,10 +19,7 @@ setup_16S_surv_relabund_normal<-
   left_join(s16_clinical_annos)%>%
   filter(`Tumor-NormalStatus`=="Normal")%>%
   drop_na(VITAL_STATUS,STAGE_simple,SURVIVAL_TIME_WEEKS_DERIVED)%>%
-  mutate(VITAL_STATUS=(VITAL_STATUS%%2)+1)%>%
-  mutate(vital_status_10Y=if_else(SURVIVAL_TIME_WEEKS_DERIVED>520,1,VITAL_STATUS),
-         survival_weeks_10Y=if_else(SURVIVAL_TIME_WEEKS_DERIVED>520,520.0,SURVIVAL_TIME_WEEKS_DERIVED),
-         stage_binned=if_else(STAGE_simple %in% c("II","III","IV"),"late",STAGE_simple),
+  mutate(stage_binned=if_else(STAGE_simple %in% c("II","III","IV"),"late",STAGE_simple),
          age_over_65=AGE_AT_DIAGNOSIS>65,
          age_by10=cut_interval(AGE_AT_DIAGNOSIS,length = 10))%>%
   filter(VITAL_STATUS!="99999",STAGE_simple!="99999")
@@ -35,10 +32,7 @@ setup_16S_surv_relabund_tumor<-
   left_join(s16_clinical_annos)%>%
   filter(`Tumor-NormalStatus`=="Tumor")%>%
   drop_na(VITAL_STATUS,STAGE_simple,SURVIVAL_TIME_WEEKS_DERIVED)%>%
-  mutate(VITAL_STATUS=(VITAL_STATUS%%2)+1)%>%
-  mutate(vital_status_10Y=if_else(SURVIVAL_TIME_WEEKS_DERIVED>520,1,VITAL_STATUS),
-         survival_weeks_10Y=if_else(SURVIVAL_TIME_WEEKS_DERIVED>520,520.0,SURVIVAL_TIME_WEEKS_DERIVED),
-         stage_binned=if_else(STAGE_simple %in% c("II","III","IV"),"late",STAGE_simple),
+  mutate(stage_binned=if_else(STAGE_simple %in% c("II","III","IV"),"late",STAGE_simple),
          age_over_65=AGE_AT_DIAGNOSIS>65,
          age_by10=cut_interval(AGE_AT_DIAGNOSIS,length = 10))%>%
   filter(VITAL_STATUS!="99999",STAGE_simple!="99999")
@@ -102,10 +96,7 @@ s16_richness_survival<-
   filter(VITAL_STATUS!="99999",
          !is.na(SURVIVAL_TIME_WEEKS_DERIVED),
          STAGE_simple!="99999")%>%
-  mutate(VITAL_STATUS=(VITAL_STATUS%%2)+1)%>%
-  mutate(vital_status_10Y=if_else(SURVIVAL_TIME_WEEKS_DERIVED>520,1,VITAL_STATUS),
-         survival_weeks_10Y=if_else(SURVIVAL_TIME_WEEKS_DERIVED>520,520.0,SURVIVAL_TIME_WEEKS_DERIVED),
-         stage_binned=if_else(STAGE_simple %in% c("II,III","IV"),"late",STAGE_simple),
+  mutate(stage_binned=if_else(STAGE_simple %in% c("II,III","IV"),"late",STAGE_simple),
          age_over_65=AGE_AT_DIAGNOSIS>65,
          age_by10=cut_interval(AGE_AT_DIAGNOSIS,length = 10))%>%
   mutate(rarefied_250=ntile(N250,n=2),
@@ -145,10 +136,7 @@ s16_diversity_survival<-
   filter(VITAL_STATUS!="99999",
          !is.na(SURVIVAL_TIME_WEEKS_DERIVED),
          STAGE_simple!="99999")%>%
-  mutate(VITAL_STATUS=(VITAL_STATUS%%2)+1)%>%
-  mutate(vital_status_10Y=if_else(SURVIVAL_TIME_WEEKS_DERIVED>520,1,VITAL_STATUS),
-         survival_weeks_10Y=if_else(SURVIVAL_TIME_WEEKS_DERIVED>520,520.0,SURVIVAL_TIME_WEEKS_DERIVED),
-         stage_binned=if_else(STAGE_simple %in% c("II,III","IV"),"late",STAGE_simple),
+  mutate(stage_binned=if_else(STAGE_simple %in% c("II,III","IV"),"late",STAGE_simple),
          age_over_65=AGE_AT_DIAGNOSIS>65,
          age_by10=cut_interval(AGE_AT_DIAGNOSIS,length = 10))%>%
   mutate(rarefied_250=ntile(`Shannon diversity`,n=2),

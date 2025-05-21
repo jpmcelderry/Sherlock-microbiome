@@ -9,7 +9,7 @@ rna_combatd_clr<-
   t()%>%clr(.+0.1)%>%t()%>%
   as.data.frame()
 
-# SURVIVAL WITH GENUS ABUNDANCE 2-TILES
+# SURVIVAL WITH GENUS ABUNDANCE
 setup_rna_surv_relabund_normal<-
   rna_combatd_clr%>%
   t()%>%
@@ -18,10 +18,7 @@ setup_rna_surv_relabund_normal<-
   left_join(rna_annots_full)%>%
   filter(Type=="Normal")%>%
   drop_na(VITAL_STATUS,STAGE_simple,SURVIVAL_TIME_WEEKS_DERIVED)%>%
-  mutate(VITAL_STATUS=(VITAL_STATUS%%2)+1)%>%
-  mutate(vital_status_10Y=if_else(SURVIVAL_TIME_WEEKS_DERIVED>520,1,VITAL_STATUS),
-         survival_weeks_10Y=if_else(SURVIVAL_TIME_WEEKS_DERIVED>520,520.0,SURVIVAL_TIME_WEEKS_DERIVED),
-         stage_binned=if_else(STAGE_simple %in% c("II,III","IV"),"late",STAGE_simple),
+  mutate(stage_binned=if_else(STAGE_simple %in% c("II,III","IV"),"late",STAGE_simple),
          age_over_65=AGE_AT_DIAGNOSIS>65,
          age_by10=cut_interval(AGE_AT_DIAGNOSIS,length = 10))%>%
   filter(VITAL_STATUS!="99999",STAGE_simple!="99999")
@@ -34,10 +31,7 @@ setup_rna_surv_relabund_tumor<-
   left_join(rna_annots_full)%>%
   filter(Type=="Tumor")%>%
   drop_na(VITAL_STATUS,STAGE_simple,SURVIVAL_TIME_WEEKS_DERIVED)%>%
-  mutate(VITAL_STATUS=(VITAL_STATUS%%2)+1)%>%
-  mutate(vital_status_10Y=if_else(SURVIVAL_TIME_WEEKS_DERIVED>520,1,VITAL_STATUS),
-         survival_weeks_10Y=if_else(SURVIVAL_TIME_WEEKS_DERIVED>520,520.0,SURVIVAL_TIME_WEEKS_DERIVED),
-         stage_binned=if_else(STAGE_simple %in% c("II,III","IV"),"late",STAGE_simple),
+  mutate(stage_binned=if_else(STAGE_simple %in% c("II,III","IV"),"late",STAGE_simple),
          age_over_65=AGE_AT_DIAGNOSIS>65,
          age_by10=cut_interval(AGE_AT_DIAGNOSIS,length = 10))%>%
   filter(VITAL_STATUS!="99999",STAGE_simple!="99999")
@@ -97,11 +91,9 @@ setup_genus_KMeier<-
   mutate(clr=ntile(clr,n=2),.by = Site_REF)%>%
   left_join(rna_annots_full)%>%
   drop_na(VITAL_STATUS,STAGE_simple)%>%
-  mutate(VITAL_STATUS=(VITAL_STATUS%%2)+1)%>%
-  mutate(vital_status_10Y=if_else(SURVIVAL_TIME_WEEKS_DERIVED>520,1,VITAL_STATUS),
-         survival_weeks_10Y=if_else(SURVIVAL_TIME_WEEKS_DERIVED>520,520.0,SURVIVAL_TIME_WEEKS_DERIVED),
-         stage_binned=if_else(STAGE_simple %in% c("II,III","IV"),"late",STAGE_simple),
-         age_over_65=AGE_AT_DIAGNOSIS>65)%>%
+  mutate(stage_binned=if_else(STAGE_simple %in% c("II,III","IV"),"late",STAGE_simple),
+         age_over_65=AGE_AT_DIAGNOSIS>65,
+         age_by10=cut_interval(AGE_AT_DIAGNOSIS,length = 10))%>%
   left_join(kraken_taxonomy[,c("tax_id","name")])%>%
   select(-tax_id)%>%
   pivot_wider(names_from = "name",values_from = "clr")%>%
@@ -124,10 +116,7 @@ ADiversity_survival<-
   left_join(rna_annots_full)%>%
   drop_na(STAGE_simple,SURVIVAL_TIME_WEEKS_DERIVED)%>%
   filter(Type=="Tumor",STAGE_simple!="99999",!VITAL_STATUS=="99999")%>%
-  mutate(VITAL_STATUS=(VITAL_STATUS%%2)+1)%>%
-  mutate(vital_status_10Y=if_else(SURVIVAL_TIME_WEEKS_DERIVED>520,1,VITAL_STATUS),
-         survival_weeks_10Y=if_else(SURVIVAL_TIME_WEEKS_DERIVED>520,520.0,SURVIVAL_TIME_WEEKS_DERIVED),
-         stage_binned=if_else(STAGE_simple %in% c("II,III","IV"),"late",STAGE_simple),
+  mutate(stage_binned=if_else(STAGE_simple %in% c("II,III","IV"),"late",STAGE_simple),
          age_over_65=AGE_AT_DIAGNOSIS>65,
          age_by10=cut_interval(AGE_AT_DIAGNOSIS,length = 10))%>%
   mutate(rarefied_500=ntile(`500`,n=2),rarefied_750=ntile(`750`,n=2),
@@ -168,10 +157,7 @@ richness_survival<-
   filter(VITAL_STATUS!="99999",
          !is.na(SURVIVAL_TIME_WEEKS_DERIVED),
          STAGE_simple!="99999")%>%
-  mutate(VITAL_STATUS=(VITAL_STATUS%%2)+1)%>%
-  mutate(vital_status_10Y=if_else(SURVIVAL_TIME_WEEKS_DERIVED>520,1,VITAL_STATUS),
-         survival_weeks_10Y=if_else(SURVIVAL_TIME_WEEKS_DERIVED>520,520.0,SURVIVAL_TIME_WEEKS_DERIVED),
-         stage_binned=if_else(STAGE_simple %in% c("II,III","IV"),"late",STAGE_simple),
+  mutate(stage_binned=if_else(STAGE_simple %in% c("II,III","IV"),"late",STAGE_simple),
          age_over_65=AGE_AT_DIAGNOSIS>65,
          age_by10=cut_interval(AGE_AT_DIAGNOSIS,length = 10))%>%
   mutate(rarefied_500=ntile(N500,n=2),

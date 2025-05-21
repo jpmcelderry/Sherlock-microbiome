@@ -18,7 +18,8 @@ WGS_extractSites<-
   unique()
 
 WGS_extractColor<-SBScolor[1:nrow(count(WGS_extractSites,extraction_site2))]
-names(WGS_extractColor)<-count(WGS_extractSites,extraction_site2)%>%
+names(WGS_extractColor)<-
+  count(WGS_extractSites,extraction_site2)%>%
   pull(extraction_site2)
 
 WGS_batchBefore<-
@@ -83,8 +84,6 @@ WGS_batchBefore_plot
 
 #################### BATCH CORRECT
 #
-
-
 natgen_232<-read_delim("extra_data/NatGen_232.txt",delim = "\t")%>%drop_na(Subject)
 natgen_232_barcodes<-c(natgen_232$Tumor_Barcode,natgen_232$Normal_Barcode)
 
@@ -99,7 +98,7 @@ WGS_combat_in<-
   column_to_rownames("tax_id")%>%
   select(any_of(wgs_nopublic$Barcode))%>%
   select(-any_of(natgen_232_barcodes))%>%
-  select_if(colSums(.)>50)%>%
+  select_if(colSums(.)>100)%>%
   filter(rowMeans(.>0)>0.01)
 WGS_combat_in_phylum<-
   wgs_sherlockOnly%>%
@@ -112,7 +111,7 @@ WGS_combat_in_phylum<-
   column_to_rownames("tax_id")%>%
   select(any_of(wgs_nopublic$Barcode))%>%
   select(-any_of(natgen_232_barcodes))%>%
-  select_if(colSums(.)>50)%>%
+  select_if(colSums(.)>100)%>%
   filter(rowMeans(.>0)>0.01)
 
 wgs.adj.var<-
@@ -216,7 +215,7 @@ wgs_rawCounts_decontamd<-
   select(any_of(wgs_nopublic$Barcode))%>%
   select(-any_of(natgen_232_barcodes))%>%
   filter(rowMeans(.>0)>0.01)%>%
-  select_if(colSums(.)>50)%>%
+  select_if(colSums(.)>100)%>%
   decontaminate_up(c(salter_list_nonHuman$tax_id),
                    "genus",
                    tax_table)%>%
@@ -234,7 +233,7 @@ NG232_combat_in<-
                         pull(tax_id)))%>%
   column_to_rownames("tax_id")%>%
   select(any_of(natgen_232_barcodes))%>%
-  select_if(colSums(.)>50)%>%
+  select_if(colSums(.)>100)%>%
   filter(rowMeans(.>0)>0.01)
 NG232_combat_in_phylum<-
   wgs_sherlockOnly%>%
@@ -246,7 +245,7 @@ NG232_combat_in_phylum<-
   )%>%
   column_to_rownames("tax_id")%>%
   select(any_of(natgen_232_barcodes))%>%
-  select_if(colSums(.)>50)%>%
+  select_if(colSums(.)>100)%>%
   filter(rowMeans(.>0)>0.01)
 NG232.adj.var2<-
   WGS_extractSites%>%
@@ -337,7 +336,7 @@ ng232_rawCounts_decontamd<-
   select(any_of(wgs_nopublic$Barcode))%>%
   select(any_of(natgen_232_barcodes))%>%
   filter(rowMeans(.>0)>0.01)%>%
-  select_if(colSums(.)>50)%>%
+  select_if(colSums(.)>100)%>%
   decontaminate_up(c(salter_list_nonHuman$tax_id),
                    "genus",
                    tax_table)%>%
