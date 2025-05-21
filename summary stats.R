@@ -59,9 +59,24 @@ kraken_assignment_results_microbial<-
   left_join(unified_taxonomy)
 kraken_assignment_results_microbial
 
-compare_read_counts%>%
+total_reads<-
+  rna_rawCounts_decontamd%>%
+  full_join(s16_scrubbed)%>%
+  full_join(wgs_raw_combined)%>%
+  left_join(unified_taxonomy)%>%
+  filter(type=="superkingdom",str_detect(taxonomy,"Bacteria"))%>%
+  select(where(is.numeric))%>%
+  replace(is.na(.),0)%>%
+  colSums()%>%
+  as.data.frame()%>%
+  rownames_to_column("Barcode")%>%rename(Reads=".")%>%
+  filter(Barcode %in% c(colnames(s16_scrubbed),
+                        colnames(rna_combatd_decontamd),
+                        colnames(wgs_raw_combined)))%>%
+  left_join(all_sample_TNstatus)%>%
   group_by(dataset,Source)%>%
   summarise(median(Reads),n=n())
+total_reads
 
 relative_abundance_summary<-
   s16_scrubbed%>%
@@ -104,6 +119,8 @@ big_bacteria_relative_abundances<-
             max=max(Reads)*100,
             .by = c(platform,name))
 big_bacteria_relative_abundances
+big_bacteria_relative_abundances%>%
+  summarise(round(range(mean),digits = 1),.by=name)
 
 BAL_bacteria_relative_abundances<-
   relative_abundance_summary%>%
@@ -115,3 +132,5 @@ BAL_bacteria_relative_abundances<-
   summarise(sum=sum(Reads))%>%
   summarise(mean=mean(sum)*100)
 BAL_bacteria_relative_abundances
+
+rm(relative_abundance_summary)
